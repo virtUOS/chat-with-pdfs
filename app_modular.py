@@ -798,6 +798,84 @@ def main():
 
                 chat_container = st.container(height=height_column_container)
                 
+                # Display chat history
+                with chat_container:
+                    if current_file in st.session_state.chat_history:
+                        for msg_idx, msg in enumerate(st.session_state.chat_history[current_file]):
+                            with st.chat_message(msg["role"]):
+                                st.markdown(msg["content"])
+                                
+                                # Display sources if this is an assistant message
+                                if msg["role"] == "assistant":
+                                    # Check if this message is for the current document before showing citation buttons
+                                    is_for_current_document = msg.get("document", current_file) == current_file
+                                    
+                                    # Display citation buttons for all messages (including the latest one)
+                                    if msg.get("citations") and is_for_current_document:
+                                        citation_numbers = msg.get("citations", [])
+                                        # Citation buttons and jumping functionality removed
+                                        # We keep the citation_numbers for displaying source information
+                                    
+                                    if msg.get("sources"):
+                                        # Add a heading for Sources before the expander
+                                        with st.expander("Show Sources"):
+                                            # Get citation numbers for this message
+                                            citation_numbers = msg.get("citations", [])
+                                            
+                                            if citation_numbers:
+                                                # Only display sources that are actually cited in the response
+                                                displayed_sources = set()
+                                                
+                                                for citation_num in sorted(citation_numbers):
+                                                    source_index = citation_num - 1  # Convert 1-based citation to 0-based index
+                                                    
+                                                    if source_index in displayed_sources:
+                                                        continue  # Skip if already displayed this source
+                                                    
+                                                    if source_index < len(msg["sources"]):
+                                                        source_text = msg["sources"][source_index]
+                                                        st.write(source_text)
+                                                        displayed_sources.add(source_index)
+                                                        
+                                                        # Add separator between sources
+                                                        if len(displayed_sources) < len(citation_numbers):
+                                                            st.markdown("---")
+                                            else:
+                                                # Fallback: If no citations found, show all sources
+                                                for i, source_text in enumerate(msg["sources"]):
+                                                    st.write(source_text)
+                                                    if i < len(msg["sources"]) - 1:
+                                                        st.markdown("---")
+                                
+                                    # Display images if available
+                                    if msg.get("images"):
+                                        with st.expander("📊 **Related Images:**"):
+
+                                            images_list = msg.get("images", [])
+                                            
+                                            for i, img_info in enumerate(images_list):
+                                                try:
+                                                    print("Image info", img_info)
+                                                    # Extract path and caption
+                                                    if isinstance(img_info, dict) and 'path' in img_info:
+                                                        img_path = img_info['path']
+                                                        img_caption = img_info.get('caption', f"Document Image {i+1}")
+                                                        
+                                                        # Try different path options in order of likelihood
+                                                        image_displayed = False
+
+                                                        try:
+                                                            st.image(img_path, caption=img_caption)
+                                                            image_displayed = True
+                                                        except Exception as e:
+                                                            image_displayed = False
+                                                        
+                                                        # Show warning if image couldn't be displayed
+                                                        if not image_displayed:
+                                                            st.warning(f"Could not display image {i+1}")
+                                                except Exception as e:
+                                                    st.warning(f"Error displaying image: {str(e)}")
+
                 # Display query suggestions as pills if available
                 current_doc_id = st.session_state.pdf_data[current_file]['doc_id']
                 if (
@@ -937,84 +1015,6 @@ def main():
                             
                             # Force a page rerun to update the UI
                             st.rerun()
-                
-                # Display chat history
-                with chat_container:
-                    if current_file in st.session_state.chat_history:
-                        for msg_idx, msg in enumerate(st.session_state.chat_history[current_file]):
-                            with st.chat_message(msg["role"]):
-                                st.markdown(msg["content"])
-                                
-                                # Display sources if this is an assistant message
-                                if msg["role"] == "assistant":
-                                    # Check if this message is for the current document before showing citation buttons
-                                    is_for_current_document = msg.get("document", current_file) == current_file
-                                    
-                                    # Display citation buttons for all messages (including the latest one)
-                                    if msg.get("citations") and is_for_current_document:
-                                        citation_numbers = msg.get("citations", [])
-                                        # Citation buttons and jumping functionality removed
-                                        # We keep the citation_numbers for displaying source information
-                                    
-                                    if msg.get("sources"):
-                                        # Add a heading for Sources before the expander
-                                        with st.expander("Show Sources"):
-                                            # Get citation numbers for this message
-                                            citation_numbers = msg.get("citations", [])
-                                            
-                                            if citation_numbers:
-                                                # Only display sources that are actually cited in the response
-                                                displayed_sources = set()
-                                                
-                                                for citation_num in sorted(citation_numbers):
-                                                    source_index = citation_num - 1  # Convert 1-based citation to 0-based index
-                                                    
-                                                    if source_index in displayed_sources:
-                                                        continue  # Skip if already displayed this source
-                                                    
-                                                    if source_index < len(msg["sources"]):
-                                                        source_text = msg["sources"][source_index]
-                                                        st.write(source_text)
-                                                        displayed_sources.add(source_index)
-                                                        
-                                                        # Add separator between sources
-                                                        if len(displayed_sources) < len(citation_numbers):
-                                                            st.markdown("---")
-                                            else:
-                                                # Fallback: If no citations found, show all sources
-                                                for i, source_text in enumerate(msg["sources"]):
-                                                    st.write(source_text)
-                                                    if i < len(msg["sources"]) - 1:
-                                                        st.markdown("---")
-                                
-                                    # Display images if available
-                                    if msg.get("images"):
-                                        with st.expander("📊 **Related Images:**"):
-
-                                            images_list = msg.get("images", [])
-                                            
-                                            for i, img_info in enumerate(images_list):
-                                                try:
-                                                    print("Image info", img_info)
-                                                    # Extract path and caption
-                                                    if isinstance(img_info, dict) and 'path' in img_info:
-                                                        img_path = img_info['path']
-                                                        img_caption = img_info.get('caption', f"Document Image {i+1}")
-                                                        
-                                                        # Try different path options in order of likelihood
-                                                        image_displayed = False
-
-                                                        try:
-                                                            st.image(img_path, caption=img_caption)
-                                                            image_displayed = True
-                                                        except Exception as e:
-                                                            image_displayed = False
-                                                        
-                                                        # Show warning if image couldn't be displayed
-                                                        if not image_displayed:
-                                                            st.warning(f"Could not display image {i+1}")
-                                                except Exception as e:
-                                                    st.warning(f"Error displaying image: {str(e)}")
                 
                 # Query input (within the chat tab)
                 prompt = st.chat_input("Ask a question about your document...")
