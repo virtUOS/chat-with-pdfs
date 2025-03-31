@@ -16,6 +16,12 @@ temp_files/
 tmp_assets/
 VectorStore/
 
+# Roo/Memory Bank related
+memory-bank/
+rooignore
+roomodes
+insert-variables.sh
+
 # IDE
 .vscode/
 .idea/

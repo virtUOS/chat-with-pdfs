@@ -1,8 +1,8 @@
-# Chat-with-Docs
+# Chat-with-PDFs
 
 An interactive application that allows users to upload PDF documents and have natural language conversations with them using LLM technology.
 
-![Chat-with-Docs Logo](assets/img/logo.svg)
+![Chat-with-PDFs Logo](assets/img/logo.svg)
 
 ## Features
 
