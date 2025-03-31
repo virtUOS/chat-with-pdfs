@@ -1,0 +1,10 @@
+streamlit
+llama-index
+openai
+python-dotenv
+streamlit-js-eval
+streamlit-dimensions
+streamlit-pdf-viewer
+pymupdf4llm
+llama-index-vector-stores-milvus
+pymilvus

@@ -1,0 +1,24 @@
+# Environment variables
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+.roo/
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Project-specific
+temp_files/
+tmp_assets/
+VectorStore/
+
+# IDE
+.vscode/
+.idea/
+
+# Miscellaneous
+.DS_Store
