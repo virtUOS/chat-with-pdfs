@@ -65,8 +65,7 @@ class DocumentManager:
             query_engine = ChatEngine.create_query_engine(
                 vector_index,
                 keyword_index,
-                doc_id,
-                citation_mode=st.session_state.citation_mode
+                doc_id
             )
             
             # Store data for reuse using StateManager

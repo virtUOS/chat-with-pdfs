@@ -7,7 +7,7 @@ import os
 # Image paths and settings
 IMAGES_PATH = os.path.join(os.getcwd(), "tmp_assets/tmp_images/")
 
-# Prompt templates
+# Prompt template
 CITATION_PROMPT = """
     CRITICAL INSTRUCTION: Your response MUST include numbered citations in square brackets [1], [2], etc.
 
@@ -40,17 +40,8 @@ CITATION_PROMPT = """
     Answer (YOU MUST INCLUDE NUMBERED CITATIONS IN FORMAT [1], [2], ETC.):
     """
 
-DEFAULT_PROMPT = "Please provide an answer that considers both the provided sources and your general knowledge. \
-    While you may use the sources as a basis, you are allowed to expand on the answer with additional details. \
-    If sources don't address the query specifically, you can use your knowledge to provide a helpful response. \
-    \n------\n \
-    Sources: {context_str} \
-    \n------\n \
-    Query: {query_str}"
-
 # For backward compatibility
 CITATION_CHAT_PROMPT = CITATION_PROMPT
-GENERAL_CHAT_PROMPT = DEFAULT_PROMPT
 
 # Model settings
 DEFAULT_MODEL = "gpt-4o-mini"

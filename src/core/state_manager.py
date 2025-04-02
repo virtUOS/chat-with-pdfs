@@ -39,9 +39,6 @@ class StateManager:
             st.session_state['document_image_map'] = {}
         
         # Settings
-        if 'citation_mode' not in st.session_state:
-            st.session_state['citation_mode'] = True
-        
         if 'model_name' not in st.session_state:
             st.session_state['model_name'] = DEFAULT_MODEL
         

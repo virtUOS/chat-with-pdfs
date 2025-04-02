@@ -101,8 +101,7 @@ def handle_query_submission(query_text: str, current_file: str, chat_container) 
         with st.spinner('Thinking...'):
             try:
                 # Process the query using the chat engine
-                citation_mode = st.session_state.get('citation_mode', True)
-                response = ChatEngine.process_query(query_text, current_file, citation_mode)
+                response = ChatEngine.process_query(query_text, current_file)
                 
                 # Extract information from the response
                 answer = response.get('answer', "Sorry, I couldn't process your query.")
@@ -166,7 +165,6 @@ def handle_settings_change(model_name=None) -> None:
     
     Args:
         model_name: New model name (if changed)
-        citation_mode: New citation mode setting (if changed)
         auto_expand_sources: New auto-expand sources setting (if changed)
     """
     # Update model if changed

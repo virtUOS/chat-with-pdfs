@@ -11,27 +11,26 @@ from llama_index.core.query_engine import RetrieverQueryEngine
 
 from ..utils.logger import Logger
 from ..utils.image import process_source_for_images, get_document_images
-from ..config import CITATION_PROMPT, DEFAULT_PROMPT
+from ..config import CITATION_PROMPT
 
 class ChatEngine:
     """Manages query processing and response generation."""
     
     @staticmethod
-    def create_query_engine(vector_index, keyword_index, doc_id, citation_mode=True):
+    def create_query_engine(vector_index, keyword_index, doc_id):
         """Create a query engine for a document.
         
         Args:
             vector_index: Vector store index for the document
             keyword_index: Keyword index for the document
             doc_id: Document ID
-            citation_mode: Whether to include citations in responses
             
         Returns:
             Object: Query engine for the document
         """
         from ..custom_retriever import CustomRetriever
         
-        Logger.info(f"Creating query engine for document {doc_id} with citation mode: {citation_mode}")
+        Logger.info(f"Creating query engine for document {doc_id}")
         
         # Initialize retrievers
         vector_retriever = vector_index.as_retriever(similarity_top_k=3)
@@ -44,8 +43,8 @@ class ChatEngine:
             mode="OR",
         )
         
-        # Select prompt based on citation mode
-        prompt_template_str = CITATION_PROMPT if citation_mode else DEFAULT_PROMPT
+        # Use citation prompt (now the default)
+        prompt_template_str = CITATION_PROMPT
         
         # Convert string template to PromptTemplate
         prompt_template = PromptTemplate(prompt_template_str)
@@ -72,7 +71,6 @@ class ChatEngine:
         Args:
             prompt: The user query
             file_name: The name of the file to query
-            citation_mode: Whether citation mode is enabled
             
         Returns:
             Dictionary containing answer, sources, and images
