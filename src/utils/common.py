@@ -1,16 +1,17 @@
 """
-Utility functions for the Chat with Docs application.
+Common utility functions for the Chat with Docs application.
 """
 
 import os
 import time
 import uuid
 import streamlit as st
+from typing import Optional
+
 from llama_index.core import Settings
 from llama_index.llms.openai import OpenAI
 
-from .config import MODELS, DEFAULT_MODEL
-
+from ..config import MODELS, DEFAULT_MODEL
 
 def generate_unique_component_key(prefix, component_type, identifier, context=None):
     """
@@ -68,69 +69,6 @@ def generate_stable_component_key(prefix, component_type, identifier, context=No
     
     # 3. Create a stable key without timestamps or incrementing counters
     return f"{prefix}_{st.session_state.component_key_random}{context_str}_{component_type}_{identifier}"
-
-
-def initialize_session_state():
-    """Initialize the session state variables."""
-    if 'query_engine' not in st.session_state:
-        st.session_state['query_engine'] = {}
-    
-    if 'pdf_data' not in st.session_state:
-        st.session_state['pdf_data'] = {}
-    
-    if 'chat_history' not in st.session_state:
-        st.session_state['chat_history'] = {}
-    elif not isinstance(st.session_state['chat_history'], dict):
-        # Ensure proper type if deserialization issues occur
-        print("Warning: chat_history is not a dictionary. Resetting it.")
-        st.session_state['chat_history'] = {}
-    
-    if 'metadata_store' not in st.session_state:
-        st.session_state['metadata_store'] = {}
-    
-    if 'file_document_id' not in st.session_state:
-        st.session_state['file_document_id'] = {}
-    
-    if 'document_image_map' not in st.session_state:
-        st.session_state['document_image_map'] = {}
-    
-    if 'citation_mode' not in st.session_state:
-        st.session_state['citation_mode'] = True
-    
-    if 'model_name' not in st.session_state:
-        st.session_state['model_name'] = DEFAULT_MODEL
-
-    if 'processed_files' not in st.session_state:
-        st.session_state['processed_files'] = set()
-        
-    if 'just_processed_file' not in st.session_state:
-        st.session_state['just_processed_file'] = False
-        
-    if 'interaction_id' not in st.session_state:
-        st.session_state['interaction_id'] = 0
-
-    if 'uploader_id' not in st.session_state:
-        st.session_state['uploader_id'] = 0
-        
-    if 'document_summaries' not in st.session_state:
-        st.session_state['document_summaries'] = {}
-
-    if 'document_responses' not in st.session_state:
-        st.session_state['document_responses'] = {}
-    
-    if 'document_query_suggestions' not in st.session_state:
-        st.session_state['document_query_suggestions'] = {}
-        
-    # The following variables are kept for compatibility but are no longer used for annotation jumping
-    # They were previously used for citation button functionality that has been removed
-    if 'selected_annotation_index' not in st.session_state:
-        st.session_state['selected_annotation_index'] = None
-    
-    if 'highlighted_citation' not in st.session_state:
-        st.session_state['highlighted_citation'] = None
-    
-    if 'auto_expand_sources' not in st.session_state:
-        st.session_state['auto_expand_sources'] = False
 
 
 def initialize_llm_settings():
