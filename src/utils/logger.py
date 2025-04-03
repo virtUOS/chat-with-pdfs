@@ -3,7 +3,6 @@ Structured logging system for the Chat with Docs application.
 """
 
 import logging
-import os
 import streamlit as st
 from datetime import datetime
 from typing import Optional
@@ -15,19 +14,17 @@ class Logger:
     _log_to_ui: bool = True
     
     @classmethod
-    def initialize(cls, log_level=logging.INFO, log_file=None, log_to_ui=True):
+    def initialize(cls, log_level=logging.INFO, log_file=None):
         """Initialize the logger.
         
         Args:
             log_level: The logging level (default: INFO)
             log_file: Path to log file (if None, logs to console only)
-            log_to_ui: Whether to show important logs in the UI
         """
         # Create logger if it doesn't exist
         if cls._logger is None:
             cls._logger = logging.getLogger("chat_with_docs")
             cls._logger.setLevel(log_level)
-            cls._log_to_ui = log_to_ui
             
             # Create console handler
             console_handler = logging.StreamHandler()
