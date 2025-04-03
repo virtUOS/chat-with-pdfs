@@ -372,10 +372,14 @@ def render_main_content() -> None:
                 if suggestions:
                     # Display suggestions as pills
                     try:
+                        # Use the help parameter to show the full suggestion text on hover
+                        help_text = "Available suggestions:\n" + "\n".join([f"• {suggestion}" for suggestion in suggestions])
+                        
                         selected_suggestion = st.pills(
-                            label="",
+                            label="Query suggestions:",
                             options=suggestions,
-                            selection_mode="single"
+                            selection_mode="single",
+                            help=help_text
                         )
                         
                         # If a suggestion is selected
