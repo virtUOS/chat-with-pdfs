@@ -27,7 +27,7 @@ def main():
     )
     
     # Initialize logger
-    Logger.initialize(log_to_ui=True)
+    Logger.initialize()
     Logger.info("Starting Chat with Docs application")
     
     # Initialize session state and create directories

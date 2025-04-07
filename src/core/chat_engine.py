@@ -102,6 +102,29 @@ class ChatEngine:
                 source_nodes = response.source_nodes
             elif 'source_nodes' in dir(response):
                 source_nodes = response.source_nodes
+
+            # --- Citation renumbering ---
+            from ..utils.source import extract_citation_indices
+            import re
+
+            # Extract all citation indices from the answer text
+            citation_indices = extract_citation_indices(synthesized_answer)
+
+            # Create mapping from original citation numbers to new sequential numbers
+            unique_citations = []
+            citation_map = {}
+            for idx in citation_indices:
+                if idx not in citation_map:
+                    citation_map[idx] = len(citation_map) + 1  # assign next sequential number
+
+            # Replace all citation markers in the answer text
+            def replace_citation(match):
+                orig_num = int(match.group(1))
+                new_num = citation_map.get(orig_num, orig_num)
+                return f"[{new_num}]"
+
+            synthesized_answer = re.sub(r"\[(\d+)\]", replace_citation, synthesized_answer)
+            # --- End citation renumbering ---
             
             # Store response for future reference
             if 'document_responses' not in st.session_state:
