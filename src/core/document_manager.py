@@ -192,7 +192,12 @@ class DocumentManager:
             page_chunks=True,
             extract_words=True
         )
-        
+
+        # DEBUG: Log pymupdf4llm.to_markdown() output
+        for idx, doc in enumerate(docs):
+            meta = doc.get('metadata', {})
+            Logger.info(f"Doc chunk {idx}: metadata keys: {list(meta.keys())}")
+            Logger.info(f"Doc chunk {idx}: page metadata: {meta.get('page')}")
         # Process document and images using the refactored methods
         llama_documents = DocumentManager._process_document_content(docs, pdf_id)
         
@@ -308,7 +313,7 @@ class DocumentManager:
             
             # Create metadata
             metadata = {
-                "page": str(document["metadata"].get("page")),
+                "page": int(document["metadata"].get("page")) if document["metadata"].get("page") is not None else None,
                 "images": images_json,
                 "toc_items": str(document.get("toc_items")),
                 "title": str(document["metadata"].get("title")),

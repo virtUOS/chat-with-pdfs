@@ -113,7 +113,7 @@ def process_source_for_images(source, current_doc_id, available_images):
                             # Extract actual page number from the image path
                             import re
                             # Always use the page number from the source metadata
-                            page_display = page_num + 1 if isinstance(page_num, int) else 1
+                            page_display = page_num if isinstance(page_num, int) else 1
                             Logger.info(f"Using page {page_display} from source metadata for image: {file_path}")
                             
                             image_info = {
