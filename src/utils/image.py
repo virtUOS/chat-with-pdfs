@@ -61,7 +61,7 @@ def process_source_for_images(source, current_doc_id, available_images):
                     import re
                     # Always use the page number from the source metadata, which is the correct context
                     # When the image appears in a source, it should be associated with that source's page
-                    page_display = page_num + 1 if isinstance(page_num, int) else 1
+                    page_display = page_num if isinstance(page_num, int) else 1
                     Logger.info(f"Using page {page_display} from source metadata for image: {img_path}")
                     
                     image_info = {
@@ -70,61 +70,6 @@ def process_source_for_images(source, current_doc_id, available_images):
                     }
                     images.append(image_info)
                     Logger.info(f"Added image from direct Markdown reference: {img_path}")
-                else:
-                    # Try to find a matching pattern in available images
-                    # Extract the filename from the path
-                    import os
-                    img_filename = os.path.basename(img_path)
-                    
-                    for avail_img in available_images:
-                        if img_filename in avail_img:
-                            # Extract actual page number from the available image path
-                            import re
-                            # Always use the page number from the source metadata
-                            page_display = page_num + 1 if isinstance(page_num, int) else 1
-                            Logger.info(f"Using page {page_display} from source metadata for image: {avail_img}")
-                            
-                            image_info = {
-                                'path': avail_img,
-                                'caption': f"Image from page {page_display}"
-                            }
-                            images.append(image_info)
-                            Logger.info(f"Added image from matching filename: {avail_img}")
-                            break
-    
-    # If no images found in text, try metadata as fallback
-    if not images and 'images' in metadata and metadata['images']:
-        try:
-            # Parse the JSON string to get image data
-            image_list = json.loads(metadata['images'])
-            
-            if isinstance(image_list, list) and image_list:
-                for img_meta in image_list:
-                    # Skip if not a dictionary
-                    if not isinstance(img_meta, dict):
-                        continue
-                    
-                    # Use the file path from the metadata if available
-                    if 'file_path' in img_meta:
-                        file_path = img_meta['file_path']
-                        
-                        # Check if this path exists in available images
-                        if file_path in available_images:
-                            # Extract actual page number from the image path
-                            import re
-                            # Always use the page number from the source metadata
-                            page_display = page_num if isinstance(page_num, int) else 1
-                            Logger.info(f"Using page {page_display} from source metadata for image: {file_path}")
-                            
-                            image_info = {
-                                'path': file_path,
-                                'caption': f"Image from page {page_display}"
-                            }
-                            images.append(image_info)
-                            Logger.info(f"Added image from metadata: {file_path}")
-                            break
-        except json.JSONDecodeError as e:
-            Logger.warning(f"Failed to parse image metadata: {e}")
     
     return images
     
