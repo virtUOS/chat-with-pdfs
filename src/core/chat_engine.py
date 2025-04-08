@@ -125,13 +125,20 @@ class ChatEngine:
             import re
 
             # Extract all citation indices from the answer text
-            citation_indices = extract_citation_indices(synthesized_answer)
+            original_citation_indices = extract_citation_indices(synthesized_answer)
 
             # Create mapping from original citation numbers to new sequential numbers
             citation_map = {}
-            for idx in citation_indices:
+            for idx in original_citation_indices:
                 if idx not in citation_map:
                     citation_map[idx] = len(citation_map) + 1  # assign next sequential number
+
+            # Build reverse map: new citation number -> original source node index (0-based)
+            reverse_citation_map = {}
+            for orig_citation_num, new_citation_num in citation_map.items():
+                # orig_citation_num is 1-based original citation number (== source node index +1)
+                # new_citation_num is 1-based new citation number
+                reverse_citation_map[new_citation_num] = orig_citation_num - 1  # convert to 0-based index
 
             # Replace all citation markers in the answer text
             def replace_citation(match):
@@ -142,6 +149,11 @@ class ChatEngine:
             synthesized_answer = re.sub(r"\[(\d+)\]", replace_citation, synthesized_answer)
             # --- End citation renumbering ---
             
+            # Map new citation numbers back to original indices for filtering
+            renumbered_citations = extract_citation_indices(synthesized_answer)
+            # Convert new citation numbers to original 0-based source node indices
+            original_citations_for_filtering = [reverse_citation_map.get(c, c) for c in renumbered_citations]
+
             # Store response for future reference
             if 'document_responses' not in st.session_state:
                 st.session_state['document_responses'] = {}
@@ -149,7 +161,7 @@ class ChatEngine:
                 st.session_state['document_responses'][file_name] = {}
             
             # Look for image references in relevant text nodes BEFORE storing the response
-            images = ChatEngine._extract_images_from_sources(source_nodes, file_name)
+            images = ChatEngine._extract_images_from_sources(source_nodes, file_name, original_citations_for_filtering)
             
             # Store this response with its sources AND images
             st.session_state['document_responses'][file_name] = {
@@ -175,18 +187,18 @@ class ChatEngine:
             }
     
     @staticmethod
-    def _extract_images_from_sources(source_nodes, file_name):
+    def _extract_images_from_sources(source_nodes, file_name, citation_indices=None):
         """
         Extract images from source nodes.
         
         Args:
             source_nodes: Source nodes from query response
             file_name: Current file name
+            citation_indices: (Optional) List of original citation indices before renumbering
             
         Returns:
             List of image information dictionaries
         """
-        # Simple implementation mirroring the original approach
         images = []
         
         if not source_nodes:
@@ -203,27 +215,33 @@ class ChatEngine:
         available_images = get_document_images(doc_id)
         Logger.info(f"Found {len(available_images)} available images for document {doc_id}")
         
-        # First, determine which sources are actually cited in the response
-        # This is to ensure we only show images from sources that the LLM actually used
+        # Determine which sources are actually cited in the response
         cited_sources = []
         cited_indices = []
         
-        # Get the latest response from session state to check citations
-        if file_name in st.session_state.get('document_responses', {}):
-            last_response = st.session_state['document_responses'][file_name]
-            answer_text = last_response.get('answer', '')
-            
-            # Extract citation indices
-            from ..utils.source import extract_citation_indices
-            cited_indices = extract_citation_indices(answer_text)
-            
-            # Map the citations to source indices (1-based to 0-based)
-            for idx in cited_indices:
-                if 1 <= idx <= len(source_nodes):
-                    cited_sources.append(source_nodes[idx-1])
+        if citation_indices is not None:
+            # Use provided original citation indices
+            cited_indices = citation_indices
+            Logger.info(f"Using original citation indices passed from process_query: {cited_indices}")
+        else:
+            # Fallback: extract from current answer text (may be renumbered, less accurate)
+            if file_name in st.session_state.get('document_responses', {}):
+                last_response = st.session_state['document_responses'][file_name]
+                answer_text = last_response.get('answer', '')
+                from ..utils.source import extract_citation_indices
+                cited_indices = extract_citation_indices(answer_text)
+                Logger.info(f"Extracted citation indices from answer text: {cited_indices}")
         
-        # If no citations found, don't show any images
+        # Map the citations to source indices (0-based)
+        for idx in cited_indices:
+            if 0 <= idx < len(source_nodes):
+                cited_sources.append(source_nodes[idx])
 
+        Logger.info(f"Cited indices: {cited_indices}")
+        Logger.info(f"Number of source nodes: {len(source_nodes)}")
+        Logger.info(f"Cited sources pages: {[getattr(s, 'metadata', {}).get('page') for s in cited_sources]}")
+
+        # If no citations found, don't show any images
         if not cited_sources and cited_indices:
             Logger.info(f"No valid cited sources found for indices: {cited_indices}")
             return images
@@ -241,6 +259,11 @@ class ChatEngine:
             try:
                 # DEBUG: Log cited source content before image extraction
                 meta = getattr(source, 'metadata', {})
+
+                # DEBUG: Log images metadata of this cited source
+                images_meta_str = meta.get('images', '') if isinstance(meta, dict) else ''
+                Logger.info(f"Cited source images metadata: {images_meta_str[:500]}")
+
                 page = meta.get('page') if isinstance(meta, dict) else None
                 text = getattr(source, 'text', '')
                 Logger.info(f"Processing cited source page {page}, preview: {text[:200].replace('\\n', ' ')}")
@@ -262,7 +285,8 @@ class ChatEngine:
                     if img_path and not any(img.get('file_path') == img_path for img in images):
                         images.append({
                             'file_path': img_path,
-                            'caption': caption
+                            'caption': '' if caption.strip() == '-----' else caption,
+                            'page': meta.get('page') if isinstance(meta, dict) else None
                         })
                         Logger.debug(f"Added image from metadata: {img_path}")
             except Exception as e:

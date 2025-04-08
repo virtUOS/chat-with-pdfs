@@ -12,6 +12,25 @@ from llama_index.core import Document as LlamaDocument
 from llama_index.core import VectorStoreIndex, SimpleKeywordTableIndex
 from llama_index.core.storage.docstore import SimpleDocumentStore
 
+
+def serialize_rects(obj):
+    import fitz
+    if isinstance(obj, fitz.Rect):
+        return [obj.x0, obj.y0, obj.x1, obj.y1]
+    elif isinstance(obj, dict):
+        new_obj = {}
+        for k, v in obj.items():
+            # Force convert known bbox keys
+            if k.lower() in ('bbox', 'rect', 'clip', 'cropbox', 'mediabox') and isinstance(v, fitz.Rect):
+                new_obj[k] = [v.x0, v.y0, v.x1, v.y1]
+            else:
+                new_obj[k] = serialize_rects(v)
+        return new_obj
+    elif isinstance(obj, list):
+        return [serialize_rects(i) for i in obj]
+    else:
+        return obj
+
 from ..utils.logger import Logger
 from ..config import IMAGES_PATH, SUMMARY_MODEL
 from .file_processor import FileProcessor
@@ -385,7 +404,7 @@ class DocumentManager:
             all_unified_images.extend(unified_images)
             
             try:
-                images_json = json.dumps(unified_images)
+                images_json = json.dumps(serialize_rects(unified_images))
             except Exception as e:
                 Logger.warning(f"Could not serialize unified images: {e}")
                 images_json = "[]"

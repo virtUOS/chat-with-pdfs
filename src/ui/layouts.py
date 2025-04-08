@@ -355,9 +355,9 @@ def render_main_content() -> None:
                                             with cols[i % 2]:
                                                 try:
                                                     # Check if image exists
-                                                    if os.path.exists(img_info['path']):
+                                                    if os.path.exists(img_info['file_path']):
                                                         # Read the image file as binary data
-                                                        with open(img_info['path'], 'rb') as f:
+                                                        with open(img_info['file_path'], 'rb') as f:
                                                             img_bytes = f.read()
                                                         page_num = img_info.get('page', 'unknown')
                                                         meta_caption = img_info.get('caption', '')
@@ -367,11 +367,11 @@ def render_main_content() -> None:
                                                             caption = f"Image from page {page_num}"
                                                         st.image(img_bytes, caption=caption)
                                                     else:
-                                                        Logger.warning(f"Image file not found: {img_info['path']}")
-                                                        st.warning(f"Image file not found: {os.path.basename(img_info['path'])}")
+                                                        Logger.warning(f"Image file not found: {img_info['file_path']}")
+                                                        st.warning(f"Image file not found: {os.path.basename(img_info['file_path'])}")
                                                 except Exception as e:
-                                                    Logger.error(f"Error displaying image {img_info['path']}: {e}")
-                                                    st.warning(f"Error displaying image: {os.path.basename(img_info['path']) if 'path' in img_info else 'Unknown'}")
+                                                    Logger.error(f"Error displaying image {img_info['file_path']}: {e}")
+                                                    st.warning(f"Error displaying image: {os.path.basename(img_info['file_path']) if 'file_path' in img_info else 'Unknown'}")
             
             # Display query suggestions as pills if available
             current_doc_id = st.session_state.pdf_data[current_file].get('doc_id', '')
