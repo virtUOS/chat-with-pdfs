@@ -327,6 +327,14 @@ def render_main_content() -> None:
                                                 continue  # Skip if already displayed this source
                                             
                                             if source_index < len(msg["sources"]):
+
+                                                # DEBUG: Log full source text before formatting
+                                                try:
+                                                    full_text = getattr(source, 'text', '')
+                                                    Logger.info(f"Full source text (len={len(full_text)}): {full_text[:500].replace('\n', ' ')}")
+                                                except Exception as e:
+                                                    Logger.warning(f"Error logging full source text: {e}")
+
                                                 source = msg["sources"][source_index]
                                                 # Format the source properly using the utility function
                                                 formatted_source, _ = format_source_for_display(source, citation_num)
@@ -351,7 +359,13 @@ def render_main_content() -> None:
                                                         # Read the image file as binary data
                                                         with open(img_info['path'], 'rb') as f:
                                                             img_bytes = f.read()
-                                                        st.image(img_bytes, caption=img_info.get('caption', f"Image {i+1}"))
+                                                        page_num = img_info.get('page', 'unknown')
+                                                        meta_caption = img_info.get('caption', '')
+                                                        if meta_caption:
+                                                            caption = f"Image from page {page_num}: {meta_caption}"
+                                                        else:
+                                                            caption = f"Image from page {page_num}"
+                                                        st.image(img_bytes, caption=caption)
                                                     else:
                                                         Logger.warning(f"Image file not found: {img_info['path']}")
                                                         st.warning(f"Image file not found: {os.path.basename(img_info['path'])}")

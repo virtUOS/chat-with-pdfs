@@ -234,14 +234,73 @@ class DocumentManager:
         # Convert to Llama Index documents
         llama_documents = []
         for document in docs:
+            # DEBUG: Log chunk info
+            page_num = document.get('metadata', {}).get('page')
+            text_len = len(document.get('text', ''))
+            preview = document.get('text', '')[:200].replace('\n', ' ')
+            Logger.info(f"Chunk page: {page_num}, length: {text_len}, preview: {preview}")
+
             # Extract Markdown image references from text
-            markdown_images = re.findall(r'!\[(.*?)\]\((.*?)\)', document["text"])
+            markdown_images = list(re.finditer(r'!\[.*?\]\((.*?)\)', document["text"]))
             image_paths_dict = {}
+            image_refs = []
             
-            for _, img_path in markdown_images:
+            Logger.info(f"Found {len(markdown_images)} Markdown image references in text on page {page_num}")
+
+            for match in markdown_images:
+                img_path = match.group(1).strip()
+                start_offset = match.start()
+                Logger.info(f"Processing image reference: {img_path}")
+
+                # Look for caption immediately after image link
+                caption = ""
+                # Get text after image link
+                after = document["text"][match.end():]
+                # Split into lines
+                lines = after.splitlines()
+                caption_lines = []
+                caption_started = False
+                max_caption_length = 300
+                skip_blank_lines = True
+                for line in lines:
+                    line = line.strip()
+                    # Skip initial empty, ellipsis, or page number lines after image link
+                    if skip_blank_lines and (not line or line == '...' or re.match(r'^\d{1,4}$', line)):
+                        continue
+                    skip_blank_lines = False  # stop skipping once a non-empty, non-page-number line is found
+                    # Stop if empty or ellipsis line after caption started
+                    if caption_started and (not line or line == '...'):
+                        break
+                    # Stop if new section header
+                    if re.match(r'^(#|##|\s*INTRODUCTION|ABSTRACT|REFERENCES|ACKNOWLEDGMENTS)', line, re.IGNORECASE):
+                        break
+                    # Heuristic: caption start if matches or is short
+                    if (re.match(r'^(Figure|Fig\.|Table|Diagram|Chart|Image|Photo)', line, re.IGNORECASE)
+                        or (len(line) > 0 and len(line) < 200)):
+                        caption_lines.append(line)
+                        caption_started = True
+                    elif caption_started:
+                        # After caption start, append more lines
+                        caption_lines.append(line)
+                    # Stop if caption too long
+                    if sum(len(l) for l in caption_lines) > max_caption_length:
+                        break
+                caption = ' '.join(caption_lines).strip()
+                if caption:
+                    Logger.info(f"Extracted caption: '{caption[:100]}...' on page {page_num}")
+                else:
+                    Logger.info(f"No caption found after image link on page {page_num}")
+
+                image_refs.append({
+                    "file_path": img_path,  # Use consistent key 'file_path'
+                    "caption": caption,
+                    "offset": start_offset
+                })
+                Logger.info(f"Added image reference with caption: '{caption}'")
                 # Convert to absolute path if relative
                 abs_img_path = img_path
                 if not os.path.isabs(img_path):
+
                     abs_img_path = os.path.join(os.getcwd(), img_path)
                 
                 # Check if image exists
@@ -265,51 +324,71 @@ class DocumentManager:
                         image_paths_dict[len(image_paths_dict)] = img_path
             
             # Process images to make them JSON serializable
-            images_json = "[]"
+            # Unify images and image_refs into one metadata list
+            unified_images = []
+
+            # Build a map of markdown captions by filename (basename)
+            markdown_captions = {}
+            for ref in image_refs:
+                filename = os.path.basename(ref["file_path"])
+                markdown_captions[filename] = {
+                    "caption": ref.get("caption", ""),
+                    "offset": ref.get("offset", -1)
+                }
+
+            # Add images from PDF metadata, assign captions if available
             if document.get("images"):
-                # Convert non-serializable objects (like Rect) to serializable format
-                serializable_images = []
                 for i, img in enumerate(document.get("images")):
-                    serializable_img = {}
+                    img_entry = {}
                     for key, value in img.items():
-                        serializable_img[key] = value
-                    
+                        img_entry[key] = value
+
                     # Add the file path based on the image position within the current page
                     img_path = None
-                    
-                    # Get the current position of this image in the loop
-                    img_position = i  # 'i' is the loop counter for images on this page
-                    
-                    # Try to find image path using position as the key
+                    img_position = i
                     if img_position in image_paths_dict:
                         img_path = image_paths_dict[img_position]
-                        Logger.debug(f"Found image path using position match: {img_path}")
-                    # If there's only one image in paths_dict, use it
                     elif len(image_paths_dict) == 1:
                         img_path = list(image_paths_dict.values())[0]
-                        Logger.debug(f"Using single image from page: {img_path}")
-                    # If we have multiple images but no position match, log it
                     elif image_paths_dict:
-                        Logger.debug(f"No position match for image {img_position}. Available positions: {list(image_paths_dict.keys())}")
-                    
-                    if not img_path:
-                        Logger.debug(f"No path found for image at position {img_position}. Image metadata: {img}")
-                    
-                    # Store the path, ensuring it's absolute if possible
+                        pass  # no match
+
                     if img_path:
                         if not os.path.isabs(img_path) and os.path.exists(os.path.join(os.getcwd(), img_path)):
-                            serializable_img['file_path'] = os.path.join(os.getcwd(), img_path)
+                            img_entry['file_path'] = os.path.join(os.getcwd(), img_path)
                         else:
-                            serializable_img['file_path'] = img_path
-                        Logger.debug(f"Added image path to metadata: {serializable_img['file_path']}")
-                    
-                    serializable_images.append(serializable_img)
-                
-                try:
-                    images_json = json.dumps(serializable_images)
-                except Exception as e:
-                    Logger.warning(f"Could not serialize images: {e}")
-                    images_json = "[]"
+                            img_entry['file_path'] = img_path
+
+                    # Assign caption if markdown reference exists for this filename
+                    filename = os.path.basename(img_entry.get('file_path', ''))
+                    caption_info = markdown_captions.get(filename)
+                    if caption_info:
+                        img_entry['caption'] = caption_info.get('caption', '')
+                        img_entry['offset'] = caption_info.get('offset', -1)
+                    else:
+                        # Otherwise, empty caption and offset
+                        img_entry['caption'] = ""
+                        img_entry['offset'] = -1
+
+                    unified_images.append(img_entry)
+
+            # Store unified images for this page
+            # Add page number to each image from document metadata
+            page_num = document["metadata"].get("page")
+            if page_num is not None:
+                for img in unified_images:
+                    img['page'] = int(page_num)
+            
+            # Collect all unified images from all pages
+            if 'all_unified_images' not in locals():
+                all_unified_images = []
+            all_unified_images.extend(unified_images)
+            
+            try:
+                images_json = json.dumps(unified_images)
+            except Exception as e:
+                Logger.warning(f"Could not serialize unified images: {e}")
+                images_json = "[]"
             
             # Create metadata
             metadata = {
@@ -334,6 +413,16 @@ class DocumentManager:
         # Store the image paths for this document using StateManager
         StateManager.store_document_image_map(pdf_id, image_paths)
         Logger.info(f"Stored {len(image_paths)} image paths for document {pdf_id}")
+        
+        # Also store the unified image metadata with captions
+        if 'all_unified_images' in locals() and all_unified_images:
+            # Debug log a few of the unified images with their captions
+            for i, img in enumerate(all_unified_images[:5]):  # Log first 5 images
+                Logger.info(f"Unified image {i+1} before storage: path={img.get('file_path', 'None')}, "
+                           f"page={img.get('page', 'None')}, caption='{img.get('caption', 'None')}'")
+            
+            StateManager.store_document_unified_images(pdf_id, all_unified_images)
+            Logger.info(f"Stored {len(all_unified_images)} unified images with captions for document {pdf_id}")
         
         return llama_documents
     

@@ -189,3 +189,27 @@ class StateManager:
     def get_query_suggestions(doc_id: str) -> List[str]:
         """Get query suggestions for a specific document."""
         return st.session_state.get('document_query_suggestions', {}).get(doc_id, [])
+    
+    @staticmethod
+    def store_document_unified_images(doc_id: str, unified_images: List[Dict[str, Any]]) -> None:
+        """Store unified image metadata (with captions and page numbers) for a specific document.
+        
+        Args:
+            doc_id: The document ID
+            unified_images: List of image info dictionaries with file_path, caption, page, etc.
+        """
+        if 'document_unified_images' not in st.session_state:
+            st.session_state['document_unified_images'] = {}
+        st.session_state['document_unified_images'][doc_id] = unified_images
+    
+    @staticmethod
+    def get_document_unified_images(doc_id: str) -> List[Dict[str, Any]]:
+        """Get unified image metadata for a specific document.
+        
+        Args:
+            doc_id: The document ID
+            
+        Returns:
+            List of image info dictionaries with file_path, caption, page, etc.
+        """
+        return st.session_state.get('document_unified_images', {}).get(doc_id, [])

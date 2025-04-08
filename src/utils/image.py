@@ -41,6 +41,16 @@ def process_source_for_images(source, current_doc_id, available_images):
     Logger.info(f"Processing source for images - doc_id: {current_doc_id}, page: {page_num}")
     Logger.info(f"Available images count: {len(available_images)}")
     
+
+    # DEBUG: Log page number and Markdown image references
+    Logger.info(f"Source page: {page_num}")
+    if text:
+        import re
+        image_matches = re.findall(r'!\[\]\(([^)]+)\)', text)
+        Logger.info(f"Found {len(image_matches)} Markdown image references in source text")
+        for img_path in image_matches:
+            Logger.info(f"Markdown image path: {img_path}")
+
     # Look for the Markdown image syntax: ![](image_path)
     if text:
         import re
@@ -65,7 +75,7 @@ def process_source_for_images(source, current_doc_id, available_images):
                     Logger.info(f"Using page {page_display} from source metadata for image: {img_path}")
                     
                     image_info = {
-                        'path': img_path,
+                        'file_path': img_path,  # Use file_path consistently across the application
                         'caption': f"Image from page {page_display}"
                     }
                     images.append(image_info)

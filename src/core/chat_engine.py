@@ -103,6 +103,23 @@ class ChatEngine:
             elif 'source_nodes' in dir(response):
                 source_nodes = response.source_nodes
 
+            # DEBUG: Log full retrieved source node text
+            for idx, src in enumerate(source_nodes):
+                try:
+                    full_text = getattr(src, 'text', '')
+                    Logger.info(f"Retrieved source {idx} full text (len={len(full_text)}): {full_text[:500].replace('\n', ' ')}")
+                except Exception as e:
+                    Logger.warning(f"Error logging retrieved source text: {e}")
+
+
+            # DEBUG: Log retrieved source nodes
+            for idx, src in enumerate(source_nodes):
+                meta = getattr(src, 'metadata', {})
+                page = meta.get('page') if isinstance(meta, dict) else None
+                text = getattr(src, 'text', '')
+                Logger.info(f"Retrieved source {idx}: page {page}, length {len(text)}, preview: {text[:200].replace('\n', ' ')}")
+
+
             # --- Citation renumbering ---
             from ..utils.source import extract_citation_indices
             import re
@@ -111,7 +128,6 @@ class ChatEngine:
             citation_indices = extract_citation_indices(synthesized_answer)
 
             # Create mapping from original citation numbers to new sequential numbers
-            unique_citations = []
             citation_map = {}
             for idx in citation_indices:
                 if idx not in citation_map:
@@ -207,25 +223,56 @@ class ChatEngine:
                     cited_sources.append(source_nodes[idx-1])
         
         # If no citations found, don't show any images
+
         if not cited_sources and cited_indices:
             Logger.info(f"No valid cited sources found for indices: {cited_indices}")
             return images
         
-        # If we couldn't determine cited sources, use all sources as fallback
-        sources_to_process = cited_sources if cited_sources else source_nodes
-        
+        # Only use cited sources for images; do not fallback to all sources
+        sources_to_process = cited_sources
+
+        # If no cited sources, return no images
+        if not sources_to_process:
+            Logger.info("No cited sources with images found; returning no images")
+            return images
+
         # Process only the cited sources for images
         for i, source in enumerate(sources_to_process):
+            try:
+                # DEBUG: Log cited source content before image extraction
+                meta = getattr(source, 'metadata', {})
+                page = meta.get('page') if isinstance(meta, dict) else None
+                text = getattr(source, 'text', '')
+                Logger.info(f"Processing cited source page {page}, preview: {text[:200].replace('\\n', ' ')}")
+            except Exception as e:
+                Logger.warning(f"Error logging cited source: {e}")
             Logger.debug(f"Processing cited source {i+1}/{len(sources_to_process)} for images")
             
             # Only use pattern matches from available images, no fallbacks
             source_images = process_source_for_images(source, doc_id, available_images)
-            
+
+            # Also parse images from metadata
+            meta = getattr(source, 'metadata', {})
+            try:
+                import json
+                image_meta_list = json.loads(meta.get('images', '[]')) if isinstance(meta, dict) else []
+                for img_meta in image_meta_list:
+                    img_path = img_meta.get('file_path') or img_meta.get('path')
+                    caption = img_meta.get('caption', '')
+                    if img_path and not any(img.get('file_path') == img_path for img in images):
+                        images.append({
+                            'file_path': img_path,
+                            'caption': caption
+                        })
+                        Logger.debug(f"Added image from metadata: {img_path}")
+            except Exception as e:
+                Logger.warning(f"Error parsing images metadata: {e}")
+
             # Add all images found for this source (avoiding duplicates)
             for img_info in source_images:
-                if not any(img.get('path') == img_info.get('path') for img in images):
+                if not any(img.get('file_path') == img_info.get('file_path') for img in images):
                     images.append(img_info)
-                    Logger.debug(f"Added image: {img_info.get('path')}")
+                    Logger.debug(f"Added image: {img_info.get('file_path')}")
         
         Logger.info(f"Found {len(images)} images in source nodes")
         return images
