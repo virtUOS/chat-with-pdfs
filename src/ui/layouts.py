@@ -259,9 +259,12 @@ def render_main_content() -> None:
                 
                 # Create annotations based on the document-specific response
                 doc_response = st.session_state.document_responses[current_file]
+                citation_mapping = doc_response.get('citation_mapping', {})
+
                 annotations = create_annotations_from_sources(
                     doc_response['answer'],
-                    doc_response['sources']
+                    doc_response['sources'],
+                    citation_mapping
                 )
                 Logger.info(f"Created {len(annotations)} annotations for document {current_file}")
             
@@ -320,48 +323,53 @@ def render_main_content() -> None:
                                         # Only display sources that are actually cited in the response
                                         displayed_sources = set()
                                         
-                                        for citation_num in sorted(citation_numbers):
-                                            source_index = citation_num - 1  # Convert 1-based citation to 0-based index
-                                            
-                                            if source_index in displayed_sources:
-                                                continue  # Skip if already displayed this source
-                                            
-                                            if source_index < len(msg["sources"]):
-
-                                                # DEBUG: Log full source text before formatting
-                                                try:
-                                                    full_text = getattr(source, 'text', '')
-                                                    Logger.info(f"Full source text (len={len(full_text)}): {full_text[:500].replace('\n', ' ')}")
-                                                except Exception as e:
-                                                    Logger.warning(f"Error logging full source text: {e}")
-
-                                                source = msg["sources"][source_index]
-                                                # Extract page number for prominent label
-                                                try:
-                                                    if hasattr(source, 'node'):
-                                                        page_num = source.node.metadata.get('page', 'N/A')
-                                                    elif hasattr(source, 'metadata') and hasattr(source, 'text'):
-                                                        page_num = source.metadata.get('page', 'N/A')
-                                                    else:
-                                                        page_num = 'Unknown'
-                                                except Exception:
-                                                    page_num = 'Error'
-                                                
-                                                # Get raw source text
-                                                source_text = format_source_for_display(source)
-                                                
-                                                # Display prominent citation label
-                                                st.markdown(f"##### **Source [{citation_num}] (Page {page_num}):**")
-                                                # Display raw source content as plain text/code block
-                                                st.code(source_text)
-                                                displayed_sources.add(source_index)
-                                                source = msg["sources"][source_index]
-
-                                                displayed_sources.add(source_index)
-                                                
-                                                # Add separator between sources
-                                                if len(displayed_sources) < len(citation_numbers):
-                                                    st.divider()
+                                        # Only proceed if we have a citation mapping
+                                        if "citation_mapping" in msg:
+                                            for citation_num in sorted(citation_numbers):
+                                                # Get the original source index from the mapping
+                                                if str(citation_num) in msg["citation_mapping"]:
+                                                    original_source_index = msg["citation_mapping"][str(citation_num)]
+                                                    
+                                                    if original_source_index in displayed_sources:
+                                                        continue  # Skip if already displayed this source
+                                                    
+                                                    if original_source_index < len(msg["sources"]):
+                                                        # Get the source using the original index
+                                                        source = msg["sources"][original_source_index]
+                                                        
+                                                        # DEBUG: Log full source text before formatting
+                                                        try:
+                                                            full_text = getattr(source, 'text', '')
+                                                            Logger.info(f"Full source text (len={len(full_text)}): {full_text[:500].replace('\n', ' ')}")
+                                                        except Exception as e:
+                                                            Logger.warning(f"Error logging full source text: {e}")
+                                                        
+                                                        # Extract page number for prominent label
+                                                        try:
+                                                            if hasattr(source, 'node'):
+                                                                page_num = source.node.metadata.get('page', 'N/A')
+                                                            elif hasattr(source, 'metadata') and hasattr(source, 'text'):
+                                                                page_num = source.metadata.get('page', 'N/A')
+                                                            else:
+                                                                page_num = 'Unknown'
+                                                        except Exception:
+                                                            page_num = 'Error'
+                                                        
+                                                        # Get raw source text
+                                                        source_text = format_source_for_display(source)
+                                                        
+                                                        # Display prominent citation label
+                                                        st.markdown(f"##### **Source [{citation_num}] (Page {page_num}):**")
+                                                        # Display raw source content as plain text/code block
+                                                        st.code(source_text)
+                                                        displayed_sources.add(original_source_index)
+                                                else:
+                                                    Logger.warning(f"Citation number {citation_num} not found in mapping")
+                                        else:
+                                            st.warning("⚠️ Citation mapping not available. Source information may be incomplete.")
+                                        # Add separator between sources
+                                        if len(displayed_sources) < len(citation_numbers):
+                                            st.divider()
                                                 
                                 # Display images if present
                                 if msg["role"] == "assistant" and msg.get("images") and len(msg["images"]) > 0:

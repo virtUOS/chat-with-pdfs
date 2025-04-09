@@ -107,6 +107,7 @@ def handle_query_submission(query_text: str, current_file: str, chat_container) 
                 answer = response.get('answer', "Sorry, I couldn't process your query.")
                 sources = response.get('sources', [])
                 images = response.get('images', [])
+                citation_mapping = response.get('citation_mapping', {})  # Get the citation mapping
                 
                 # Extract citation numbers from the response
                 from ..utils.source import extract_citation_indices
@@ -141,6 +142,7 @@ def handle_query_submission(query_text: str, current_file: str, chat_container) 
                     "images": images,
                     "citations": citations,
                     "citation_pages": citation_pages,
+                    "citation_mapping": citation_mapping,  # Use the one already extracted
                     "document": current_file,
                     "response_id": len(st.session_state.chat_history[current_file]) - 1
                 })

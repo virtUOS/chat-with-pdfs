@@ -93,23 +93,34 @@ def prepare_source_highlight(source):
     }
 
 
-def create_annotations_from_sources(answer_text, sources):
+def create_annotations_from_sources(answer_text, sources, citation_mapping=None):
     """
     Create PDF annotations from sources that are cited in the answer text.
     
     Args:
         answer_text: The answer text containing citations
         sources: List of source nodes
+        citation_mapping: Optional dict mapping citation numbers (as strings) to original source indices
         
     Returns:
         A list of annotation dictionaries
     """
+    import streamlit as st
+    from ..utils.logger import Logger
+
     citations = extract_citation_indices(answer_text)
     annotations = []
-    
+
     for idx in citations:
-        if idx <= len(sources):
-            source = sources[idx-1]  # Convert 1-based citation to 0-based index
+        # Use citation mapping if provided
+        source_index = None
+        if citation_mapping and str(idx) in citation_mapping:
+            source_index = citation_mapping[str(idx)]
+        else:
+            continue  # Skip if no mapping available
+        
+        if 0 <= source_index < len(sources):
+            source = sources[source_index]
             
             # Extract page number from source based on the source type
             page_num = None

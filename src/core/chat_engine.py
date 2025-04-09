@@ -172,10 +172,24 @@ class ChatEngine:
                 'images': images  # Add images to the stored response
             }
             
+            # Convert citation mapping keys to strings and strip whitespace for consistent UI lookup
+            reverse_citation_map = {str(k).strip(): v for k, v in reverse_citation_map.items()}
+
+            # Store this response with its sources, images, and normalized citation mapping
+            st.session_state['document_responses'][file_name] = {
+                'last_query': prompt,
+                'last_response': synthesized_answer,
+                'answer': synthesized_answer,
+                'sources': source_nodes,
+                'images': images,
+                'citation_mapping': reverse_citation_map  # Store normalized mapping
+            }
+
             return {
                 'answer': synthesized_answer,
                 'sources': source_nodes,
-                'images': images
+                'images': images,
+                'citation_mapping': reverse_citation_map  # Use string keys
             }
         
         except Exception as e:
