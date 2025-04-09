@@ -14,7 +14,8 @@ Chat with Docs processes PDF documents with LlamaIndex and generates responses u
 - **PDF Viewer**: View documents with highlighted citations
 - **Image Extraction**: Automatically extracts and displays images from documents
 - **Multi-Document Support**: Switch between multiple uploaded documents
-- **Model Selection**: Choose from different language models
+- **Multi-Provider Support**: Works with OpenAI, Ollama, and custom OpenAI-compatible API providers
+- **Model Selection**: Choose from different language models with provider-specific configurations
 
 ## Project Structure
 
@@ -22,8 +23,7 @@ The application follows a modular architecture for better maintainability and ex
 
 ```
 chat-with-docs/
-├── app.py                    # Main application (new modular version)
-├── app_modular.py            # Original application (to be deprecated)
+├── app.py                    # Main application
 ├── src/
 │   ├── core/                 # Business logic
 │   │   ├── __init__.py
@@ -47,28 +47,6 @@ chat-with-docs/
 │   └── __init__.py
 ```
 
-## Components
-
-### Core Components
-
-- **DocumentManager**: Handles document processing and storage
-- **ChatEngine**: Manages query processing and response generation
-- **StateManager**: Manages application state and session data
-- **FileProcessor**: Processes and extracts content from files
-
-### UI Components
-
-- **Components**: Reusable UI elements (document info, chat messages, etc.)
-- **Layouts**: Page layouts (sidebar, main content area)
-- **Handlers**: Event handlers for user interactions
-
-### Utilities
-
-- **Logger**: Centralized logging functionality
-- **Common**: Shared utility functions
-- **Source**: Citation and source formatting utilities
-- **Image**: Image processing utilities
-
 ## Getting Started
 
 ### Prerequisites
@@ -89,9 +67,30 @@ cd chat-with-docs
 pip install -r requirements.txt
 ```
 
-3. Create a `.env` file with your API keys:
+3. Create a `.env` file with your API keys and configuration:
 ```
+# Required for OpenAI models
 OPENAI_API_KEY=your_api_key_here
+
+# Optional: Logging level
+LOG_LEVEL=INFO  # DEBUG, INFO, WARNING, ERROR
+
+# Optional: For Ollama integration
+OLLAMA_ENDPOINT=http://localhost:11434
+OLLAMA_MODELS=llama3,gemma,mistral  # Comma-separated list of models
+
+# Optional: For custom OpenAI-compatible providers
+CUSTOM_API_ENDPOINT=https://your-custom-endpoint.com/v1
+CUSTOM_API_KEY=your_custom_api_key
+CUSTOM_MODELS=model1,model2  # Comma-separated list of custom models
+CUSTOM_SUFFIX=(Custom)  # Display suffix for UI
+
+# Optional: Model display names
+OPENAI_SUFFIX=(OpenAI)  # Display suffix for OpenAI models
+OLLAMA_SUFFIX=(Ollama)  # Display suffix for Ollama models
+
+# Optional: Default summary model
+SUMMARY_MODEL=gpt-4o-mini  # Model to use for document summarization
 ```
 
 ### Running the Application
@@ -102,28 +101,18 @@ Run the application with Streamlit:
 streamlit run app.py
 ```
 
-For the original version (to be deprecated):
-
-```bash
-streamlit run app_modular.py
-```
-
 ## Usage
 
-1. Upload a PDF document using the sidebar upload button
-2. Wait for the document to be processed
+1. Upload one or several PDF documents using the sidebar upload button
+2. Wait for the document(s) to be processed
 3. Ask questions about the document in the chat input
-4. View responses with citations to the source material
-5. Click on citations to highlight relevant sections in the PDF
-
-## Testing
-
-Run the integration tests to verify the application functionality:
-
-```bash
-python -m unittest test_phase5.py
-```
+4. View responses with citations and annotations to the source material
+6. Switch between different language models using the dropdown in the sidebar
 
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Authors
+
+virtUOS
