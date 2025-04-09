@@ -336,14 +336,32 @@ def render_main_content() -> None:
                                                     Logger.warning(f"Error logging full source text: {e}")
 
                                                 source = msg["sources"][source_index]
-                                                # Format the source properly using the utility function
-                                                formatted_source, _ = format_source_for_display(source, citation_num)
-                                                st.markdown(formatted_source)
+                                                # Extract page number for prominent label
+                                                try:
+                                                    if hasattr(source, 'node'):
+                                                        page_num = source.node.metadata.get('page', 'N/A')
+                                                    elif hasattr(source, 'metadata') and hasattr(source, 'text'):
+                                                        page_num = source.metadata.get('page', 'N/A')
+                                                    else:
+                                                        page_num = 'Unknown'
+                                                except Exception:
+                                                    page_num = 'Error'
+                                                
+                                                # Get raw source text
+                                                source_text = format_source_for_display(source)
+                                                
+                                                # Display prominent citation label
+                                                st.markdown(f"##### **Source [{citation_num}] (Page {page_num}):**")
+                                                # Display raw source content as plain text/code block
+                                                st.code(source_text)
+                                                displayed_sources.add(source_index)
+                                                source = msg["sources"][source_index]
+
                                                 displayed_sources.add(source_index)
                                                 
                                                 # Add separator between sources
                                                 if len(displayed_sources) < len(citation_numbers):
-                                                    st.markdown("---")
+                                                    st.divider()
                                                 
                                 # Display images if present
                                 if msg["role"] == "assistant" and msg.get("images") and len(msg["images"]) > 0:

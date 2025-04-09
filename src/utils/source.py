@@ -158,40 +158,24 @@ def create_annotations_from_sources(answer_text, sources):
     return annotations
 
 
-def format_source_for_display(source, citation_num=None):
+def format_source_for_display(source):
     """
     Format a source for display in the UI with improved styling.
     
     Args:
-        source: The source node
-        citation_num: Optional citation number
-        
+        source: The source node        
     Returns:
-        A tuple of (formatted_markdown, source_text)
+        The source_text formatted for display
     """
     try:
         # Extract metadata and text based on source type
         if hasattr(source, 'node'):
-            page_num = source.node.metadata.get('page', 'N/A')
-            text = source.node.text.strip()
+            source_text = source.node.text.strip()
         elif hasattr(source, 'metadata') and hasattr(source, 'text'):
-            page_num = source.metadata.get('page', 'N/A')
-            text = source.text.strip()
+            source_text = source.text.strip()
         else:
-            page_num = 'Unknown'
-            text = str(source) if source is not None else 'No text available'
+            source_text = str(source) if source is not None else 'No text available'
     except Exception as e:
-        page_num = 'Error'
-        text = f"Could not extract source text: {str(e)}"
+        source_text = f"Could not extract source text: {str(e)}"
     
-    # Format with citation number if provided
-    if citation_num:
-        source_id = f"Source [{citation_num}]"
-    else:
-        source_id = "Source"
-    
-    # Create a cleaner, more readable format without code blocks
-    markdown = f"**{source_id} (Page {page_num})**:\n{text}"
-    source_text = f"{source_id} (Page {page_num}):\n{text}"
-    
-    return markdown, source_text
+    return source_text
