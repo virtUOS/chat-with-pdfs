@@ -20,7 +20,7 @@ def main():
     """Main application function."""
     # Set page configuration
     st.set_page_config(
-        page_title="Chat with your PDF",
+        page_title="Chat with your PDFs",
         page_icon="📚",
         layout="wide",
         initial_sidebar_state="expanded"
@@ -28,14 +28,14 @@ def main():
     
     # Initialize logger
     Logger.initialize()
-    Logger.info("Starting Chat with Docs application")
+    Logger.info("Starting Chat with PDFs application")
     
     # Initialize session state and create directories
     StateManager.initialize()
     create_empty_directories()
     
     # Application header
-    st.title("Chat with your PDF")
+    st.title("Chat with your PDFs")
     
     # Render the sidebar (document upload and settings)
     render_sidebar()
