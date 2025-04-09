@@ -15,8 +15,7 @@ from ..core.document_manager import DocumentManager
 from .components import (
     display_document_info, display_document_images,
 )
-from ..config import MODELS, OLLAMA_MODELS, OLLAMA_SUFFIX, OPENAI_SUFFIX
-from ..config import MODELS
+from ..config import MODELS, OLLAMA_MODELS, OLLAMA_SUFFIX, OPENAI_SUFFIX, CUSTOM_MODELS, CUSTOM_SUFFIX
 from .handlers import handle_query_submission, handle_settings_change
 
 def render_sidebar() -> None:
@@ -195,11 +194,13 @@ def render_sidebar() -> None:
         st.header("Settings")
         # Model selection
 
-        # Build display names with suffixes for Ollama and OpenAI models
+        # Build display names with suffixes for Ollama, Custom, and OpenAI models
         model_display_map = {}
         for model in MODELS.keys():
             if model in OLLAMA_MODELS:
                 display_name = f"{model} {OLLAMA_SUFFIX}"
+            elif model in CUSTOM_MODELS:
+                display_name = f"{model} {CUSTOM_SUFFIX}"
             else:
                 display_name = f"{model} {OPENAI_SUFFIX}"
             model_display_map[display_name] = model

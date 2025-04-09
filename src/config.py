@@ -2,6 +2,13 @@
 Configuration settings and constants for the Chat with Docs application.
 """
 
+
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 import os
 
 # Image paths and settings
@@ -58,6 +65,18 @@ SUMMARY_MODEL = os.environ.get("SUMMARY_MODEL", DEFAULT_MODEL)
 if not os.environ.get("OPENAI_API_KEY"):
     print("Warning: OPENAI_API_KEY environment variable not set")
 
+# Custom OpenAI-compatible provider config
+CUSTOM_API_ENDPOINT = os.environ.get("CUSTOM_API_ENDPOINT", "")
+CUSTOM_API_KEY = os.environ.get("CUSTOM_API_KEY", "")
+CUSTOM_SUFFIX = os.environ.get("CUSTOM_SUFFIX", "(Custom)")
+
+custom_models_env = os.environ.get("CUSTOM_MODELS", "")
+CUSTOM_MODELS = [m.strip() for m in custom_models_env.split(",") if m.strip()]
+
+for model_name in CUSTOM_MODELS:
+    MODELS[model_name] = {"temperature": 0.2}
+
+
 # OpenAI suffix label
 OPENAI_SUFFIX = os.environ.get("OPENAI_SUFFIX", "(OpenAI)")
 
@@ -74,4 +93,8 @@ OLLAMA_MODELS = [m.strip() for m in ollama_models_env.split(",") if m.strip()]
 # Add Ollama models to MODELS dict with default parameters
 for model_name in OLLAMA_MODELS:
     MODELS[model_name] = {"temperature": 0.2}
+
+print(f"[DEBUG] MODELS loaded: {list(MODELS.keys())}")
+print(f"[DEBUG] OLLAMA_MODELS: {OLLAMA_MODELS}")
+
 
