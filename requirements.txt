@@ -1,10 +1,17 @@
+# Core dependencies
 streamlit
 llama-index
-openai
 python-dotenv
+openai
+
+# PDF processing
+pymupdf4llm
+PyMuPDF  # Explicit dependency for fitz module
+
+# Streamlit extensions
 streamlit-js-eval
 streamlit-dimensions
 streamlit-pdf-viewer
-pymupdf4llm
-llama-index-vector-stores-milvus
-pymilvus
+
+# Optional Ollama support
+llama-index-llms-ollama
