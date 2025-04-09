@@ -111,6 +111,12 @@ streamlit run app.py
 3. Ask questions about the document in the chat input
 4. View responses with citations and annotations to the source material
 6. Switch between different language models using the dropdown in the sidebar
+## TODO
+
+- Custom size of chunks
+- Chat with all the PDFs
+- Allow users to refer to images if the model supports vision
+
 
 ## Authors
 
