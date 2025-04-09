@@ -339,7 +339,7 @@ def render_main_content() -> None:
                             if citation_numbers:
                                 # Display sources if this is an assistant message with sources
                                 if msg["role"] == "assistant" and msg.get("sources"):
-                                    with st.expander("Show Sources"):
+                                    with st.expander("📂 Show Sources"):
                                         # Only display sources that are actually cited in the response
                                         displayed_sources = set()
                                         
@@ -394,7 +394,7 @@ def render_main_content() -> None:
                                 # Display images if present
                                 if msg["role"] == "assistant" and msg.get("images") and len(msg["images"]) > 0:
                                     Logger.info(f"Displaying {len(msg['images'])} images in message")
-                                    with st.expander("View Images", expanded=False):
+                                    with st.expander("🖼️ View Images", expanded=False):
                                         # Create a grid layout for images (2 columns)
                                         cols = st.columns(2)
                                         for i, img_info in enumerate(msg["images"]):
