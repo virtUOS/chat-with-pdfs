@@ -57,3 +57,21 @@ SUMMARY_MODEL = os.environ.get("SUMMARY_MODEL", DEFAULT_MODEL)
 # Check for OpenAI API key
 if not os.environ.get("OPENAI_API_KEY"):
     print("Warning: OPENAI_API_KEY environment variable not set")
+
+# OpenAI suffix label
+OPENAI_SUFFIX = os.environ.get("OPENAI_SUFFIX", "(OpenAI)")
+
+
+# Ollama configuration
+OLLAMA_ENDPOINT = os.environ.get("OLLAMA_ENDPOINT", "http://localhost:11434")
+OLLAMA_API_KEY = os.environ.get("OLLAMA_API_KEY", "")
+OLLAMA_SUFFIX = os.environ.get("OLLAMA_SUFFIX", "(Ollama)")
+
+# Parse Ollama models from environment variable
+ollama_models_env = os.environ.get("OLLAMA_MODELS", "")
+OLLAMA_MODELS = [m.strip() for m in ollama_models_env.split(",") if m.strip()]
+
+# Add Ollama models to MODELS dict with default parameters
+for model_name in OLLAMA_MODELS:
+    MODELS[model_name] = {"temperature": 0.2}
+

@@ -15,6 +15,7 @@ from ..core.document_manager import DocumentManager
 from .components import (
     display_document_info, display_document_images,
 )
+from ..config import MODELS, OLLAMA_MODELS, OLLAMA_SUFFIX, OPENAI_SUFFIX
 from ..config import MODELS
 from .handlers import handle_query_submission, handle_settings_change
 
@@ -193,19 +194,37 @@ def render_sidebar() -> None:
         
         st.header("Settings")
         # Model selection
-        models = list(MODELS.keys())
-        if models:
-            current_model = st.session_state.get('model_name', models[0])
-            model_index = models.index(current_model) if current_model in models else 0
-            
-            selected_model = st.selectbox(
-                "Select Model",
-                models,
-                index=model_index
-            )
-            
-            if selected_model != current_model:
-                handle_settings_change(model_name=selected_model)
+
+        # Build display names with suffixes for Ollama and OpenAI models
+        model_display_map = {}
+        for model in MODELS.keys():
+            if model in OLLAMA_MODELS:
+                display_name = f"{model} {OLLAMA_SUFFIX}"
+            else:
+                display_name = f"{model} {OPENAI_SUFFIX}"
+            model_display_map[display_name] = model
+        display_names = list(model_display_map.keys())
+
+        # Determine current display name
+        current_model = st.session_state.get('model_name', list(MODELS.keys())[0])
+        current_display_name = None
+        for disp_name, real_name in model_display_map.items():
+            if real_name == current_model:
+                current_display_name = disp_name
+                break
+        if current_display_name is None:
+            current_display_name = display_names[0]
+
+        selected_display_name = st.selectbox(
+            "Select Model",
+            display_names,
+            index=display_names.index(current_display_name)
+        )
+
+        selected_model = model_display_map[selected_display_name]
+
+        if selected_model != current_model:
+            handle_settings_change(model_name=selected_model)
         
         # Clear chat button - only show if there's chat history for the current document
         current_file = st.session_state.get('current_file')

@@ -487,6 +487,23 @@ class DocumentManager:
             if len(sample_text) > max_chars:
                 sample_text = sample_text[:max_chars] + "..."
             
+
+            from ..config import OLLAMA_MODELS, OLLAMA_ENDPOINT, OLLAMA_API_KEY
+            from llama_index.llms.openai import OpenAI
+            try:
+                from llama_index.llms.ollama import Ollama
+            except ImportError:
+                Ollama = None
+
+            if SUMMARY_MODEL in OLLAMA_MODELS and Ollama is not None:
+                llm = Ollama(
+                    model=SUMMARY_MODEL,
+                    base_url=OLLAMA_ENDPOINT,
+                    api_key=OLLAMA_API_KEY or None
+                )
+            else:
+                llm = OpenAI(model=SUMMARY_MODEL)
+
             from llama_index.llms.openai import OpenAI
             
             # Initialize the LLM with the summary model
