@@ -1,6 +1,8 @@
 # Chat with Docs
 
 A Streamlit application that allows users to upload PDF documents and chat with them using LLM technology.
+![Chat with Docs Screenshot](assets/img/chat-with-pdfs-screenshot.png)
+
 
 ## Overview
 
