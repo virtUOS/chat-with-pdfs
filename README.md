@@ -26,6 +26,7 @@ The application follows a modular architecture for better maintainability and ex
 ```
 chat-with-docs/
 ├── app.py                    # Main application
+├── assets/img                # Static assets (images)
 ├── src/
 │   ├── core/                 # Business logic
 │   │   ├── __init__.py
@@ -110,10 +111,6 @@ streamlit run app.py
 3. Ask questions about the document in the chat input
 4. View responses with citations and annotations to the source material
 6. Switch between different language models using the dropdown in the sidebar
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
 
 ## Authors
 
