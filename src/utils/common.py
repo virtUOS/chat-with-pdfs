@@ -93,9 +93,13 @@ def initialize_llm_settings():
 
 def create_empty_directories():
     """Create necessary directories if they don't exist."""
+    # Use environment variables for temp directories, default to /tmp subdirectories
+    temp_files_path = os.environ.get("TEMP_FILES_PATH", "/tmp/chat-with-pdfs/temp_files")
+    tmp_assets_path = os.environ.get("TMP_ASSETS_PATH", "/tmp/chat-with-pdfs/tmp_assets/tmp_images")
+    
     # Create temp directories if they don't exist
-    os.makedirs("temp_files", exist_ok=True)
-    os.makedirs("tmp_assets/tmp_images", exist_ok=True)
+    os.makedirs(temp_files_path, exist_ok=True)
+    os.makedirs(tmp_assets_path, exist_ok=True)
 
 
 def format_chat_history(history):

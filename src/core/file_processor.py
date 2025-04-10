@@ -23,18 +23,22 @@ class FileProcessor:
         os.makedirs(path, exist_ok=True)
     
     @staticmethod
-    def save_uploaded_file(uploaded_file, directory: str = "temp_files") -> str:
+    def save_uploaded_file(uploaded_file, directory: str = None) -> str:
         """Save an uploaded file to a temporary location.
         
         Args:
             uploaded_file: The file to save
-            directory: Target directory for the saved file
+            directory: Target directory for the saved file. If None, uses TEMP_FILES_PATH from environment.
             
         Returns:
             str: Path to the saved file
         """
+        # Use environment variable if directory is not specified
+        if directory is None:
+            directory = os.environ.get("TEMP_FILES_PATH", "/tmp/chat-with-pdfs/temp_files")
+        
         # Get absolute path for temp directory
-        temp_dir = os.path.join(os.getcwd(), directory)
+        temp_dir = directory if os.path.isabs(directory) else os.path.join(os.getcwd(), directory)
         
         # Create directory if it doesn't exist
         FileProcessor.ensure_dir_exists(temp_dir)

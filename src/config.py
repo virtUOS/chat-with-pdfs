@@ -12,7 +12,7 @@ except ImportError:
 import os
 
 # Image paths and settings
-IMAGES_PATH = os.path.join(os.getcwd(), "tmp_assets/tmp_images/")
+IMAGES_PATH = os.environ.get("TMP_ASSETS_PATH", "/tmp/chat-with-pdfs/tmp_assets/tmp_images")
 
 # Prompt template
 CITATION_PROMPT = """
