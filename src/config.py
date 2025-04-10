@@ -85,16 +85,17 @@ OPENAI_SUFFIX = os.environ.get("OPENAI_SUFFIX", "(OpenAI)")
 OLLAMA_ENDPOINT = os.environ.get("OLLAMA_ENDPOINT", "http://localhost:11434")
 OLLAMA_API_KEY = os.environ.get("OLLAMA_API_KEY", "")
 OLLAMA_SUFFIX = os.environ.get("OLLAMA_SUFFIX", "(Ollama)")
-
 # Parse Ollama models from environment variable
 ollama_models_env = os.environ.get("OLLAMA_MODELS", "")
 OLLAMA_MODELS = [m.strip() for m in ollama_models_env.split(",") if m.strip()]
 
-# Add Ollama models to MODELS dict with default parameters
+# Add Ollama models to MODELS dict with default parameters - ONLY from environment variable
 for model_name in OLLAMA_MODELS:
     MODELS[model_name] = {"temperature": 0.2}
 
+# Debug information
 print(f"[DEBUG] MODELS loaded: {list(MODELS.keys())}")
 print(f"[DEBUG] OLLAMA_MODELS: {OLLAMA_MODELS}")
+
 
 
