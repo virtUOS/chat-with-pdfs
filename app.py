@@ -34,6 +34,10 @@ def main():
     StateManager.initialize()
     create_empty_directories()
     
+    # Initialize LLM settings with the configured model
+    from src.utils.common import initialize_llm_settings
+    initialize_llm_settings()
+    
     # Application header
     st.title("Chat with your PDFs")
     

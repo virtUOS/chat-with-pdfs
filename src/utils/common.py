@@ -12,6 +12,7 @@ from llama_index.core import Settings
 from llama_index.llms.openai import OpenAI
 
 from ..config import MODELS, DEFAULT_MODEL
+from ..utils.logger import Logger
 
 def generate_unique_component_key(prefix, component_type, identifier, context=None):
     """
@@ -73,14 +74,52 @@ def generate_stable_component_key(prefix, component_type, identifier, context=No
 
 def initialize_llm_settings():
     """Initialize LLM settings."""
+    from ..config import OLLAMA_MODELS, CUSTOM_MODELS, OLLAMA_ENDPOINT
+    
     model_name = st.session_state.get('model_name', DEFAULT_MODEL)
     model_settings = MODELS.get(model_name, MODELS[DEFAULT_MODEL])
+    temperature = model_settings.get("temperature", 0.2)
     
-    # Initialize LLM
-    llm = OpenAI(
-        model=model_name,
-        temperature=model_settings["temperature"]
-    )
+    # Initialize LLM based on model type
+    if model_name in OLLAMA_MODELS:
+        try:
+            Logger.info(f"Initializing Ollama model: {model_name} at {OLLAMA_ENDPOINT}")
+            from llama_index.llms.ollama import Ollama
+            
+            # Extract base model name if it has parameters (e.g., llama3.2-vision:90b)
+            base_model = model_name.split(':')[0] if ':' in model_name else model_name
+            
+            llm = Ollama(
+                model=base_model,
+                temperature=temperature,
+                base_url=OLLAMA_ENDPOINT,
+                request_timeout=60.0
+            )
+        except ImportError:
+            Logger.error("Failed to import Ollama. Make sure llama-index-llms-ollama is installed.")
+            # Fallback to OpenAI
+            llm = OpenAI(model=DEFAULT_MODEL, temperature=temperature)
+    elif model_name in CUSTOM_MODELS:
+        try:
+            from ..config import CUSTOM_API_ENDPOINT
+            Logger.info(f"Initializing custom OpenAI-compatible model: {model_name} at {CUSTOM_API_ENDPOINT}")
+            # Use OpenAI with custom endpoint
+            llm = OpenAI(
+                model=model_name,
+                temperature=temperature,
+                api_base=CUSTOM_API_ENDPOINT
+            )
+        except Exception as e:
+            Logger.error(f"Failed to initialize custom model: {e}")
+            # Fallback to default OpenAI
+            llm = OpenAI(model=DEFAULT_MODEL, temperature=temperature)
+    else:
+        Logger.info(f"Initializing OpenAI model: {model_name}")
+        # Regular OpenAI model
+        llm = OpenAI(
+            model=model_name,
+            temperature=temperature
+        )
     
     # Update the global settings
     Settings.llm = llm
