@@ -13,7 +13,7 @@ from ..utils.logger import Logger
 from ..utils.source import format_source_for_display
 from ..core.document_manager import DocumentManager
 from .components import (
-    display_document_info, display_document_images,
+    display_document_info, display_document_images, render_advanced_settings,
 )
 from ..config import MODELS, OLLAMA_MODELS, OLLAMA_SUFFIX, OPENAI_SUFFIX, CUSTOM_MODELS, CUSTOM_SUFFIX
 from .handlers import handle_query_submission, handle_settings_change
@@ -226,6 +226,9 @@ def render_sidebar() -> None:
 
         if selected_model != current_model:
             handle_settings_change(model_name=selected_model)
+        
+        # Add advanced settings section
+        render_advanced_settings()
         
         # Clear chat button - only show if there's chat history for the current document
         current_file = st.session_state.get('current_file')
@@ -471,4 +474,3 @@ def render_main_content() -> None:
         # Images tab
         with images_tab:
             display_document_images(current_file)
-

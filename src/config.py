@@ -12,7 +12,12 @@ except ImportError:
 import os
 
 # Image paths and settings
-IMAGES_PATH = os.path.join(os.getcwd(), "tmp_assets/tmp_images/")
+IMAGES_PATH = os.environ.get("TMP_ASSETS_PATH", "/tmp/chat-with-pdfs/tmp_assets/tmp_images")
+
+# Document chunking settings
+DEFAULT_CHUNK_SIZE = 1000  # Default characters per chunk
+DEFAULT_CHUNK_OVERLAP = 200  # Default overlap between chunks
+CHUNK_SIZE_DESCRIPTION = "Number of characters per chunk (smaller chunks may improve relevance but reduce context)"
 
 # Prompt template
 CITATION_PROMPT = """
@@ -96,5 +101,3 @@ for model_name in OLLAMA_MODELS:
 
 print(f"[DEBUG] MODELS loaded: {list(MODELS.keys())}")
 print(f"[DEBUG] OLLAMA_MODELS: {OLLAMA_MODELS}")
-
-

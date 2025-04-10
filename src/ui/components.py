@@ -8,6 +8,8 @@ import ast
 import fitz  # PyMuPDF
 
 from ..utils.logger import Logger
+from ..core.state_manager import StateManager
+from ..config import DEFAULT_CHUNK_SIZE, DEFAULT_CHUNK_OVERLAP, CHUNK_SIZE_DESCRIPTION
 
 def display_document_info(file_name: str) -> None:
     """Display metadata information for the current document."""
@@ -96,8 +98,20 @@ def display_document_images(file_name: str) -> None:
         return
     
     # Get unified images directly from session state
-    from ..core.state_manager import StateManager
     unified_images = StateManager.get_document_unified_images(doc_id)
+    
+    # Ensure deduplication of images by file path
+    if unified_images:
+        deduplicated_images = []
+        seen_paths = set()
+        
+        for img in unified_images:
+            img_path = img.get('file_path')
+            if img_path and img_path not in seen_paths:
+                seen_paths.add(img_path)
+                deduplicated_images.append(img)
+        
+        unified_images = deduplicated_images
     
     # Debug log unified images
     Logger.info(f"Got {len(unified_images) if unified_images else 0} unified images for document {doc_id}")
@@ -207,6 +221,38 @@ def display_document_images(file_name: str) -> None:
             with cols[i % 3]:
                 Logger.warning(f"Image file not found: {img_path}")
                 st.warning(f"Image file not found: {os.path.basename(img_path)}")
+
+
+def render_advanced_settings() -> None:
+    """Render advanced settings controls."""
+    with st.expander("Advanced Settings"):
+        # Chunk size slider
+        current_chunk_size = StateManager.get_chunk_size()
+        chunk_size = st.slider(
+            "Chunk Size (characters)",
+            min_value=200, 
+            max_value=2000,
+            value=current_chunk_size,
+            step=100,
+            help=CHUNK_SIZE_DESCRIPTION
+        )
+        
+        # Update state if changed
+        if chunk_size != current_chunk_size:
+            StateManager.set_chunk_size(chunk_size)
+            Logger.info(f"Chunk size updated to {chunk_size} characters")
+        
+        # Informational text about chunk size
+        st.info(
+            "Chunk size affects how documents are processed for question answering:\n\n"
+            f"- **Smaller chunks** ({DEFAULT_CHUNK_SIZE//2} chars): Higher precision for specific details, but less context\n"
+            f"- **Default** ({DEFAULT_CHUNK_SIZE} chars): Balanced precision and context\n"
+            f"- **Larger chunks** ({DEFAULT_CHUNK_SIZE*2} chars): More context, but may reduce precision\n\n"
+            "Changes apply to newly processed documents."
+        )
+        
+        # Show current overlap setting
+        st.caption(f"Chunk overlap: {DEFAULT_CHUNK_OVERLAP} characters (fixed)")
 
 
 def _extract_document_metadata(vector_index):

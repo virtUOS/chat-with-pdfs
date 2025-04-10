@@ -6,7 +6,7 @@ import streamlit as st
 from typing import Any, Dict, List, Set, Optional
 
 # Import from config
-from ..config import DEFAULT_MODEL
+from ..config import DEFAULT_MODEL, DEFAULT_CHUNK_SIZE
 
 class StateManager:
     """Centralized manager for session state variables."""
@@ -41,6 +41,9 @@ class StateManager:
         # Settings
         if 'model_name' not in st.session_state:
             st.session_state['model_name'] = DEFAULT_MODEL
+            
+        if 'chunk_size' not in st.session_state:
+            st.session_state['chunk_size'] = DEFAULT_CHUNK_SIZE
         
         # File tracking
         if 'processed_files' not in st.session_state:
@@ -213,3 +216,23 @@ class StateManager:
             List of image info dictionaries with file_path, caption, page, etc.
         """
         return st.session_state.get('document_unified_images', {}).get(doc_id, [])
+        
+    @staticmethod
+    def get_chunk_size() -> int:
+        """Get the current chunk size.
+        
+        Returns:
+            int: The current chunk size in characters
+        """
+        if 'chunk_size' not in st.session_state:
+            st.session_state['chunk_size'] = DEFAULT_CHUNK_SIZE
+        return st.session_state['chunk_size']
+    
+    @staticmethod
+    def set_chunk_size(chunk_size: int) -> None:
+        """Set the chunk size.
+        
+        Args:
+            chunk_size: The chunk size in characters
+        """
+        st.session_state['chunk_size'] = chunk_size
