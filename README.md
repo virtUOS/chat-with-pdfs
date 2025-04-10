@@ -1,4 +1,4 @@
-# Chat with Docs
+# Chat with PDFs
 
 A Streamlit application that allows users to upload PDF documents and chat with them using LLM technology.
 ![Chat with Docs Screenshot](assets/img/chat-with-pdfs-screenshot.png)
@@ -6,7 +6,7 @@ A Streamlit application that allows users to upload PDF documents and chat with 
 
 ## Overview
 
-Chat with Docs processes PDF documents with LlamaIndex and generates responses using various language models. The application features a user-friendly interface for document management, chat history, and document visualization.
+Chat with PDFs processes PDF documents with LlamaIndex and generates responses using various language models. The application features a user-friendly interface for document management, chat history, and document visualization.
 
 ## Features
 
