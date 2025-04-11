@@ -77,12 +77,32 @@ class ChatEngine:
         """
         # Check if file_name exists in the session state
         if file_name not in st.session_state.query_engine:
-            Logger.error(f"Query engine not found for file: {file_name}")
-            return {
-                'answer': "Error: File not loaded or processed correctly.",
-                'sources': [],
-                'images': []
-            }
+            Logger.warning(f"Query engine not found for file: {file_name}. Attempting to re-create it.")
+            # Try to re-create the query engine if possible
+            vector_index = st.session_state.get('vector_index', {}).get(file_name)
+            keyword_index = st.session_state.get('keyword_index', {}).get(file_name)
+            doc_id = st.session_state.get('file_document_id', {}).get(file_name)
+            if vector_index is not None and keyword_index is not None and doc_id is not None:
+                try:
+                    query_engine = ChatEngine.create_query_engine(vector_index, keyword_index, doc_id)
+                    if 'query_engine' not in st.session_state:
+                        st.session_state['query_engine'] = {}
+                    st.session_state['query_engine'][file_name] = query_engine
+                    Logger.info(f"Successfully re-created query engine for file: {file_name}")
+                except Exception as e:
+                    Logger.error(f"Failed to re-create query engine for file {file_name}: {e}")
+                    return {
+                        'answer': f"Error: Could not re-create query engine for file: {file_name}. {e}",
+                        'sources': [],
+                        'images': []
+                    }
+            else:
+                Logger.error(f"Required indices or document ID missing for file: {file_name}. Cannot re-create query engine.")
+                return {
+                    'answer': "Error: File not loaded or processed correctly.",
+                    'sources': [],
+                    'images': []
+                }
         
         Logger.info(f"Processing query for document {file_name}: {prompt[:50]}...")
         
