@@ -319,12 +319,15 @@ def render_main_content() -> None:
     with content_column:
         # Create tabs
         chat_tab, info_tab, images_tab = st.tabs(["Chat", "Document Info", "Images"])
-        
+
+        # Calculate images container height (0.6 * screen_height)
+        images_container_height = int(screen_height * 0.6) if main_container_dimensions else 500
+
         # Chat tab - contains the chat interface
         with chat_tab:
             # Create a scrollable container for chat
             chat_container = st.container(height=height_column_container)
-            
+
             # Display chat history
             with chat_container:
                 if current_file in st.session_state.chat_history:
@@ -470,5 +473,5 @@ def render_main_content() -> None:
         
         # Images tab
         with images_tab:
-            display_document_images(current_file)
+            display_document_images(current_file, container_height=images_container_height)
 
