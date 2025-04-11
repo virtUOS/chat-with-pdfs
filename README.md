@@ -92,8 +92,11 @@ CUSTOM_SUFFIX=(Custom)  # Display suffix for UI
 OPENAI_SUFFIX=(OpenAI)  # Display suffix for OpenAI models
 OLLAMA_SUFFIX=(Ollama)  # Display suffix for Ollama models
 
+# Optional: Default chat model
+DEFAULT_MODEL=gpt-4o-mini  # Set the default model for chatting (must be in MODELS, OLLAMA_MODELS, or CUSTOM_MODELS). If not set or invalid, defaults to "gpt-4o-mini".
+
 # Optional: Default summary model
-SUMMARY_MODEL=gpt-4o-mini  # Model to use for document summarization
+SUMMARY_MODEL=gpt-4o-mini  # Model to use for document summarization and automatic query generation
 ```
 
 ### Running the Application

@@ -51,12 +51,19 @@ CITATION_PROMPT = """
 CITATION_CHAT_PROMPT = CITATION_PROMPT
 
 # Model settings
-DEFAULT_MODEL = "gpt-4o-mini"
+import warnings
 MODELS = {
     "gpt-4o-mini": {"temperature": 0.2},
     "gpt-4o": {"temperature": 0.2},
     "o3-mini": {"temperature": 0.2}
 }
+# Allow DEFAULT_MODEL to be set in .env, fallback to "gpt-4o-mini"
+DEFAULT_MODEL_ENV = os.environ.get("DEFAULT_MODEL", "").strip()
+DEFAULT_MODEL = DEFAULT_MODEL_ENV if DEFAULT_MODEL_ENV else "gpt-4o-mini"
+# If the default model is not in MODELS, fallback and warn
+if DEFAULT_MODEL not in MODELS:
+    warnings.warn(f"DEFAULT_MODEL '{DEFAULT_MODEL}' not found in MODELS. Falling back to 'gpt-4o-mini'.")
+    DEFAULT_MODEL = "gpt-4o-mini"
 
 # Load summary model from environment variable, fallback to DEFAULT_MODEL
 SUMMARY_MODEL = os.environ.get("SUMMARY_MODEL", DEFAULT_MODEL)
