@@ -7,9 +7,6 @@ import streamlit as st
 import ast
 import fitz  # PyMuPDF
 
-from streamlit_js_eval import streamlit_js_eval
-from streamlit_dimensions import st_dimensions
-
 from ..utils.logger import Logger
 
 def display_document_info(file_name: str) -> None:
@@ -119,74 +116,34 @@ def display_document_images(file_name: str, container_height: int = None) -> Non
         st.caption(f"Found {len(unified_images)} images")
 
         # Use the provided dynamic height for the images container
-        if container_height is not None:
-            with st.container(height=container_height):
-                # Create a grid layout for images (3 columns)
-                cols = st.columns(3)
-
-                # Display images in a grid with captions
-                displayed_count = 0
-                for i, img_info in enumerate(unified_images):
-                    # Try both 'file_path' and 'path' for backward compatibility
-                    img_path = img_info.get('file_path') or img_info.get('path')
-                    if not img_path:
-                        Logger.warning(f"Image {i+1} has no path: {img_info}")
-                        continue
-
-                    # Debug logging
-                    Logger.info(f"Displaying image: path={img_path}, caption='{img_info.get('caption', 'None')}'")
-
-                    # Check if image exists
-                    if os.path.exists(img_path):
-                        try:
-                            # Read the image file as binary data
-                            with open(img_path, 'rb') as f:
-                                img_bytes = f.read()
-
-                            # Get page number and caption
-                            page_num = img_info.get('page', 'Unknown')
-                            caption = img_info.get('caption', '')
-
-                            # Display image with caption
-                            with cols[displayed_count % 3]:
-                                if caption:
-                                    display_caption = f"Page {page_num}: {caption}"
-                                else:
-                                    display_caption = f"Page {page_num}"
-                                st.image(img_bytes, caption=display_caption)
-                                st.caption(f"Image {displayed_count+1} of {len(unified_images)}")
-
-                            displayed_count += 1
-                        except Exception as e:
-                            with cols[displayed_count % 3]:
-                                Logger.error(f"Error displaying image {img_path}: {e}")
-                                st.warning(f"Error displaying image: {os.path.basename(img_path)}")
-                            displayed_count += 1
-                    else:
-                        with cols[displayed_count % 3]:
-                            Logger.warning(f"Image file not found: {img_path}")
-                            st.warning(f"Image file not found: {os.path.basename(img_path)}")
-                        displayed_count += 1
-
-                # If we displayed some images, return early
-                if displayed_count > 0:
-                    return
-        else:
-            # Fallback: no scrollable container, just display as before
+        with st.container(height=container_height):
+            # Create a grid layout for images (3 columns)
             cols = st.columns(3)
+
+            # Display images in a grid with captions
             displayed_count = 0
             for i, img_info in enumerate(unified_images):
+                # Try both 'file_path' and 'path' for backward compatibility
                 img_path = img_info.get('file_path') or img_info.get('path')
                 if not img_path:
                     Logger.warning(f"Image {i+1} has no path: {img_info}")
                     continue
+
+                # Debug logging
                 Logger.info(f"Displaying image: path={img_path}, caption='{img_info.get('caption', 'None')}'")
+
+                # Check if image exists
                 if os.path.exists(img_path):
                     try:
+                        # Read the image file as binary data
                         with open(img_path, 'rb') as f:
                             img_bytes = f.read()
+
+                        # Get page number and caption
                         page_num = img_info.get('page', 'Unknown')
                         caption = img_info.get('caption', '')
+
+                        # Display image with caption
                         with cols[displayed_count % 3]:
                             if caption:
                                 display_caption = f"Page {page_num}: {caption}"
@@ -194,6 +151,7 @@ def display_document_images(file_name: str, container_height: int = None) -> Non
                                 display_caption = f"Page {page_num}"
                             st.image(img_bytes, caption=display_caption)
                             st.caption(f"Image {displayed_count+1} of {len(unified_images)}")
+
                         displayed_count += 1
                     except Exception as e:
                         with cols[displayed_count % 3]:
@@ -205,6 +163,8 @@ def display_document_images(file_name: str, container_height: int = None) -> Non
                         Logger.warning(f"Image file not found: {img_path}")
                         st.warning(f"Image file not found: {os.path.basename(img_path)}")
                     displayed_count += 1
+
+            # If we displayed some images, return early
             if displayed_count > 0:
                 return
     
