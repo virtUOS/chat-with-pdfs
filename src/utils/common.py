@@ -85,11 +85,9 @@ def initialize_llm_settings():
             Logger.info(f"Initializing Ollama model: {model_name} at {OLLAMA_ENDPOINT}")
             from llama_index.llms.ollama import Ollama
             
-            # Extract base model name if it has parameters (e.g., llama3.2-vision:90b)
-            base_model = model_name.split(':')[0] if ':' in model_name else model_name
-            
+            # Use the full model name including any version/parameter suffix
             llm = Ollama(
-                model=base_model,
+                model=model_name,  # Use complete model name with version/parameters
                 temperature=temperature,
                 base_url=OLLAMA_ENDPOINT,
                 request_timeout=60.0
