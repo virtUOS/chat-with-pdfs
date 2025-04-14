@@ -6,12 +6,11 @@ import os
 import time
 import uuid
 import streamlit as st
-from typing import Optional
 
 from llama_index.core import Settings
 from llama_index.llms.openai import OpenAI
 
-from ..config import MODELS, DEFAULT_MODEL
+from ..config import MODELS, DEFAULT_MODEL, OLLAMA_MODELS, CUSTOM_MODELS, OLLAMA_ENDPOINT
 from ..utils.logger import Logger
 
 def generate_unique_component_key(prefix, component_type, identifier, context=None):
@@ -74,13 +73,13 @@ def generate_stable_component_key(prefix, component_type, identifier, context=No
 
 def initialize_llm_settings():
     """Initialize LLM settings."""
-    from ..config import OLLAMA_MODELS, CUSTOM_MODELS, OLLAMA_ENDPOINT
     
     model_name = st.session_state.get('model_name', DEFAULT_MODEL)
     model_settings = MODELS.get(model_name, MODELS[DEFAULT_MODEL])
     temperature = model_settings.get("temperature", 0.2)
     
     # Initialize LLM based on model type
+    Logger.info(f"[LLM INIT] Requested model: {model_name}")
     if model_name in OLLAMA_MODELS:
         try:
             Logger.info(f"Initializing Ollama model: {model_name} at {OLLAMA_ENDPOINT}")
@@ -95,6 +94,7 @@ def initialize_llm_settings():
                 base_url=OLLAMA_ENDPOINT,
                 request_timeout=60.0
             )
+            Logger.info(f"[LLM INIT] Ollama LLM instance created: {llm}")
         except ImportError:
             Logger.error("Failed to import Ollama. Make sure llama-index-llms-ollama is installed.")
             # Fallback to OpenAI
@@ -109,6 +109,7 @@ def initialize_llm_settings():
                 temperature=temperature,
                 api_base=CUSTOM_API_ENDPOINT
             )
+            Logger.info(f"[LLM INIT] Custom OpenAI-compatible LLM instance created: {llm}")
         except Exception as e:
             Logger.error(f"Failed to initialize custom model: {e}")
             # Fallback to default OpenAI
@@ -120,9 +121,11 @@ def initialize_llm_settings():
             model=model_name,
             temperature=temperature
         )
+        Logger.info(f"[LLM INIT] OpenAI LLM instance created: {llm}")
     
     # Update the global settings
     Settings.llm = llm
+    Logger.info(f"[LLM INIT] Settings.llm set to: {Settings.llm}")
     
     # Ensure OpenAI API key is set in environment
     os.environ["OPENAI_API_KEY"] = os.environ.get("OPENAI_API_KEY", "")

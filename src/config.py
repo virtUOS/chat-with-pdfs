@@ -52,12 +52,49 @@ CITATION_CHAT_PROMPT = CITATION_PROMPT
 
 # Model settings
 import warnings
-MODELS = {
+
+# Suffixes
+OPENAI_SUFFIX = os.environ.get("OPENAI_SUFFIX", "(OpenAI)")
+CUSTOM_SUFFIX = os.environ.get("CUSTOM_SUFFIX", "(Custom)")
+OLLAMA_SUFFIX = os.environ.get("OLLAMA_SUFFIX", "(Ollama)")
+
+# Model lists from env
+custom_models_env = os.environ.get("CUSTOM_MODELS", "")
+CUSTOM_MODELS = [m.strip() for m in custom_models_env.split(",") if m.strip()]
+ollama_models_env = os.environ.get("OLLAMA_MODELS", "")
+OLLAMA_MODELS = [m.strip() for m in ollama_models_env.split(",") if m.strip()]
+
+# Start with empty MODELS dict and add in desired order
+MODELS = {}
+
+# 1. Add custom models first
+for model_name in CUSTOM_MODELS:
+    MODELS[model_name] = {"temperature": 0.2}
+
+# 2. Add ollama models next (if not already present)
+for model_name in OLLAMA_MODELS:
+    if model_name not in MODELS:
+        MODELS[model_name] = {"temperature": 0.2}
+
+# 3. Add OpenAI models last (if not already present)
+openai_base_models = {
     "gpt-4o-mini": {"temperature": 0.2},
     "gpt-4o": {"temperature": 0.2},
     "o3-mini": {"temperature": 0.2}
 }
-# Allow DEFAULT_MODEL to be set in .env, fallback to "gpt-4o-mini"
+for model_name, params in openai_base_models.items():
+    if model_name not in MODELS:
+        MODELS[model_name] = params
+
+# Custom OpenAI-compatible provider config
+CUSTOM_API_ENDPOINT = os.environ.get("CUSTOM_API_ENDPOINT", "")
+CUSTOM_API_KEY = os.environ.get("CUSTOM_API_KEY", "")
+
+# Ollama configuration
+OLLAMA_ENDPOINT = os.environ.get("OLLAMA_ENDPOINT", "http://localhost:11434")
+OLLAMA_API_KEY = os.environ.get("OLLAMA_API_KEY", "")
+
+# Now allow DEFAULT_MODEL to be set in .env, fallback to "gpt-4o-mini"
 DEFAULT_MODEL_ENV = os.environ.get("DEFAULT_MODEL", "").strip()
 DEFAULT_MODEL = DEFAULT_MODEL_ENV if DEFAULT_MODEL_ENV else "gpt-4o-mini"
 # If the default model is not in MODELS, fallback and warn
@@ -71,34 +108,6 @@ SUMMARY_MODEL = os.environ.get("SUMMARY_MODEL", DEFAULT_MODEL)
 # Check for OpenAI API key
 if not os.environ.get("OPENAI_API_KEY"):
     print("Warning: OPENAI_API_KEY environment variable not set")
-
-# Custom OpenAI-compatible provider config
-CUSTOM_API_ENDPOINT = os.environ.get("CUSTOM_API_ENDPOINT", "")
-CUSTOM_API_KEY = os.environ.get("CUSTOM_API_KEY", "")
-CUSTOM_SUFFIX = os.environ.get("CUSTOM_SUFFIX", "(Custom)")
-
-custom_models_env = os.environ.get("CUSTOM_MODELS", "")
-CUSTOM_MODELS = [m.strip() for m in custom_models_env.split(",") if m.strip()]
-
-for model_name in CUSTOM_MODELS:
-    MODELS[model_name] = {"temperature": 0.2}
-
-
-# OpenAI suffix label
-OPENAI_SUFFIX = os.environ.get("OPENAI_SUFFIX", "(OpenAI)")
-
-
-# Ollama configuration
-OLLAMA_ENDPOINT = os.environ.get("OLLAMA_ENDPOINT", "http://localhost:11434")
-OLLAMA_API_KEY = os.environ.get("OLLAMA_API_KEY", "")
-OLLAMA_SUFFIX = os.environ.get("OLLAMA_SUFFIX", "(Ollama)")
-# Parse Ollama models from environment variable
-ollama_models_env = os.environ.get("OLLAMA_MODELS", "")
-OLLAMA_MODELS = [m.strip() for m in ollama_models_env.split(",") if m.strip()]
-
-# Add Ollama models to MODELS dict with default parameters - ONLY from environment variable
-for model_name in OLLAMA_MODELS:
-    MODELS[model_name] = {"temperature": 0.2}
 
 # Debug information
 print(f"[DEBUG] MODELS loaded: {list(MODELS.keys())}")

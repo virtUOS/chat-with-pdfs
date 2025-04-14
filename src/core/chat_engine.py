@@ -52,15 +52,21 @@ class ChatEngine:
         # Create response synthesizer
         response_synthesizer = get_response_synthesizer(
             response_mode=ResponseMode.COMPACT,
-            text_qa_template=prompt_template,
+            text_qa_template=prompt_template
+            # LLM will be updated at query time, no need to set it here
         )
+        
+        # Note: We don't need to explicitly set the LLM here since it will be
+        # updated in process_query just before execution
         
         # Create query engine
         query_engine = RetrieverQueryEngine(
             retriever=retriever,
             response_synthesizer=response_synthesizer
         )
-        
+
+        # Note: The LLM will be set at query time, not during engine creation
+
         return query_engine
     
     @staticmethod
@@ -84,6 +90,9 @@ class ChatEngine:
             doc_id = st.session_state.get('file_document_id', {}).get(file_name)
             if vector_index is not None and keyword_index is not None and doc_id is not None:
                 try:
+                    # Re-create query engine with the current model settings
+                    from llama_index.core import Settings
+                    Logger.info(f"Re-creating query engine for file: {file_name} with model: {Settings.llm.model if hasattr(Settings.llm, 'model') else 'unknown'}")
                     query_engine = ChatEngine.create_query_engine(vector_index, keyword_index, doc_id)
                     if 'query_engine' not in st.session_state:
                         st.session_state['query_engine'] = {}
@@ -107,8 +116,23 @@ class ChatEngine:
         Logger.info(f"Processing query for document {file_name}: {prompt[:50]}...")
         
         try:
+            # Log which model is being used just before executing the query
+            from llama_index.core import Settings
+            current_model = getattr(Settings.llm, 'model', 'unknown') if hasattr(Settings.llm, 'model') else str(Settings.llm)
+            Logger.info(f"Executing query with model: {current_model}")
+            
+            # Get the query engine
+            query_engine = st.session_state.query_engine[file_name]
+            
+            # Ensure the query engine is using the current LLM
+            from llama_index.core import Settings
+            if hasattr(query_engine._response_synthesizer, "_llm"):
+                # Set the LLM directly on the response synthesizer to ensure it's using the latest
+                query_engine._response_synthesizer._llm = Settings.llm
+                Logger.info(f"Using model: {getattr(Settings.llm, 'model', str(Settings.llm))} for this query")
+            
             # Execute query
-            response = st.session_state.query_engine[file_name].query(prompt)
+            response = query_engine.query(prompt)
             
             # Get the answer text
             if hasattr(response, 'response'):

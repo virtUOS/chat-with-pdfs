@@ -176,22 +176,6 @@ def handle_settings_change() -> None:
         # Re-initialize LLM settings
         from ..utils.common import initialize_llm_settings
         initialize_llm_settings()
-        # Re-create query engines for all loaded files using the new model
-        from ..core.chat_engine import ChatEngine
-        vector_indices = st.session_state.get('vector_index', {})
-        keyword_indices = st.session_state.get('keyword_index', {})
-        file_document_ids = st.session_state.get('file_document_id', {})
-        if 'query_engine' not in st.session_state:
-            st.session_state['query_engine'] = {}
-        for file_name in vector_indices:
-            vector_index = vector_indices.get(file_name)
-            keyword_index = keyword_indices.get(file_name)
-            doc_id = file_document_ids.get(file_name)
-            if vector_index is not None and keyword_index is not None and doc_id is not None:
-                try:
-                    query_engine = ChatEngine.create_query_engine(vector_index, keyword_index, doc_id)
-                    st.session_state['query_engine'][file_name] = query_engine
-                    Logger.info(f"Re-created query engine for file: {file_name} with new model: {model_name}")
-                except Exception as e:
-                    Logger.error(f"Failed to re-create query engine for file {file_name}: {e}")
-        Logger.info(f"Model changed to: {model_name} and all query engines re-created with new model.")
+        Logger.info(f"Model changed to: {model_name}. Will use this model for future queries.")
+        # Note: We don't need to recreate query engines since the LLM will be
+        # updated in the response synthesizer before each query execution
