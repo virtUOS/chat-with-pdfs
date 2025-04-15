@@ -76,15 +76,14 @@ for model_name in OLLAMA_MODELS:
     if model_name not in MODELS:
         MODELS[model_name] = {"temperature": 0.2}
 
-# 3. Add OpenAI models last (if not already present)
-openai_base_models = {
-    "gpt-4o-mini": {"temperature": 0.2},
-    "gpt-4o": {"temperature": 0.2},
-    "o3-mini": {"temperature": 0.2}
-}
-for model_name, params in openai_base_models.items():
+# 3. Add OpenAI models from MODELS env var
+models_env = os.environ.get("MODELS", "")
+openai_models_list = [m.strip() for m in models_env.split(",") if m.strip()]
+
+# Add models from MODELS env var
+for model_name in openai_models_list:
     if model_name not in MODELS:
-        MODELS[model_name] = params
+        MODELS[model_name] = {"temperature": 0.2}
 
 # Custom OpenAI-compatible provider config
 CUSTOM_API_ENDPOINT = os.environ.get("CUSTOM_API_ENDPOINT", "")
