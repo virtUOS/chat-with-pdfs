@@ -3,7 +3,6 @@ streamlit
 llama-index
 python-dotenv
 openai
-llama-index-llms-openai
 
 # PDF processing
 pymupdf4llm
