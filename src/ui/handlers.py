@@ -162,17 +162,20 @@ def handle_query_submission(query_text: str, current_file: str, chat_container) 
                 })
 
 
-def handle_settings_change(model_name=None) -> None:
-    """Handle settings changes.
-    
-    Args:
-        model_name: New model name (if changed)
-        auto_expand_sources: New auto-expand sources setting (if changed)
-    """
+def handle_settings_change() -> None:
+    """Handle settings changes for model selection."""
+    # Get the selected display name from session state
+    selected_display_name = st.session_state.get('selected_display_name')
+    model_display_map = st.session_state.get('model_display_map', {})
+    if not selected_display_name or selected_display_name not in model_display_map:
+        return
+    model_name = model_display_map[selected_display_name]
     # Update model if changed
-    if model_name is not None and model_name != st.session_state.get('model_name'):
+    if model_name != st.session_state.get('model_name'):
         st.session_state.model_name = model_name
         # Re-initialize LLM settings
         from ..utils.common import initialize_llm_settings
         initialize_llm_settings()
-        Logger.info(f"Model changed to: {model_name}")
+        Logger.info(f"Model changed to: {model_name}. Will use this model for future queries.")
+        # Note: We don't need to recreate query engines since the LLM will be
+        # updated in the response synthesizer before each query execution

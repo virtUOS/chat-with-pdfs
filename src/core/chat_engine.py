@@ -52,15 +52,21 @@ class ChatEngine:
         # Create response synthesizer
         response_synthesizer = get_response_synthesizer(
             response_mode=ResponseMode.COMPACT,
-            text_qa_template=prompt_template,
+            text_qa_template=prompt_template
+            # LLM will be updated at query time, no need to set it here
         )
+        
+        # Note: We don't need to explicitly set the LLM here since it will be
+        # updated in process_query just before execution
         
         # Create query engine
         query_engine = RetrieverQueryEngine(
             retriever=retriever,
             response_synthesizer=response_synthesizer
         )
-        
+
+        # Note: The LLM will be set at query time, not during engine creation
+
         return query_engine
     
     @staticmethod
@@ -77,18 +83,56 @@ class ChatEngine:
         """
         # Check if file_name exists in the session state
         if file_name not in st.session_state.query_engine:
-            Logger.error(f"Query engine not found for file: {file_name}")
-            return {
-                'answer': "Error: File not loaded or processed correctly.",
-                'sources': [],
-                'images': []
-            }
+            Logger.warning(f"Query engine not found for file: {file_name}. Attempting to re-create it.")
+            # Try to re-create the query engine if possible
+            vector_index = st.session_state.get('vector_index', {}).get(file_name)
+            keyword_index = st.session_state.get('keyword_index', {}).get(file_name)
+            doc_id = st.session_state.get('file_document_id', {}).get(file_name)
+            if vector_index is not None and keyword_index is not None and doc_id is not None:
+                try:
+                    # Re-create query engine with the current model settings
+                    from llama_index.core import Settings
+                    Logger.info(f"Re-creating query engine for file: {file_name} with model: {Settings.llm.model if hasattr(Settings.llm, 'model') else 'unknown'}")
+                    query_engine = ChatEngine.create_query_engine(vector_index, keyword_index, doc_id)
+                    if 'query_engine' not in st.session_state:
+                        st.session_state['query_engine'] = {}
+                    st.session_state['query_engine'][file_name] = query_engine
+                    Logger.info(f"Successfully re-created query engine for file: {file_name}")
+                except Exception as e:
+                    Logger.error(f"Failed to re-create query engine for file {file_name}: {e}")
+                    return {
+                        'answer': f"Error: Could not re-create query engine for file: {file_name}. {e}",
+                        'sources': [],
+                        'images': []
+                    }
+            else:
+                Logger.error(f"Required indices or document ID missing for file: {file_name}. Cannot re-create query engine.")
+                return {
+                    'answer': "Error: File not loaded or processed correctly.",
+                    'sources': [],
+                    'images': []
+                }
         
         Logger.info(f"Processing query for document {file_name}: {prompt[:50]}...")
         
         try:
+            # Log which model is being used just before executing the query
+            from llama_index.core import Settings
+            current_model = getattr(Settings.llm, 'model', 'unknown') if hasattr(Settings.llm, 'model') else str(Settings.llm)
+            Logger.info(f"Executing query with model: {current_model}")
+            
+            # Get the query engine
+            query_engine = st.session_state.query_engine[file_name]
+            
+            # Ensure the query engine is using the current LLM
+            from llama_index.core import Settings
+            if hasattr(query_engine._response_synthesizer, "_llm"):
+                # Set the LLM directly on the response synthesizer to ensure it's using the latest
+                query_engine._response_synthesizer._llm = Settings.llm
+                Logger.info(f"Using model: {getattr(Settings.llm, 'model', str(Settings.llm))} for this query")
+            
             # Execute query
-            response = st.session_state.query_engine[file_name].query(prompt)
+            response = query_engine.query(prompt)
             
             # Get the answer text
             if hasattr(response, 'response'):

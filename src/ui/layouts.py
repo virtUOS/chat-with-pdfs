@@ -194,17 +194,9 @@ def render_sidebar() -> None:
         st.header("Settings")
         # Model selection
 
-        # Build display names with suffixes for Ollama, Custom, and OpenAI models
-        model_display_map = {}
-        for model in MODELS.keys():
-            if model in OLLAMA_MODELS:
-                display_name = f"{model} {OLLAMA_SUFFIX}"
-            elif model in CUSTOM_MODELS:
-                display_name = f"{model} {CUSTOM_SUFFIX}"
-            else:
-                display_name = f"{model} {OPENAI_SUFFIX}"
-            model_display_map[display_name] = model
-        display_names = list(model_display_map.keys())
+        # Use model display map and display names from session state (initialized in StateManager)
+        model_display_map = st.session_state['model_display_map']
+        display_names = st.session_state['model_display_names']
 
         # Determine current display name
         current_model = st.session_state.get('model_name', list(MODELS.keys())[0])
@@ -216,17 +208,15 @@ def render_sidebar() -> None:
         if current_display_name is None:
             current_display_name = display_names[0]
 
-        selected_display_name = st.selectbox(
+        st.selectbox(
             "Select Model",
             display_names,
-            index=display_names.index(current_display_name)
+            index=display_names.index(current_display_name),
+            key='selected_display_name',
+            on_change=handle_settings_change
         )
 
-        selected_model = model_display_map[selected_display_name]
 
-        if selected_model != current_model:
-            handle_settings_change(model_name=selected_model)
-        
         # Add advanced settings section
         render_advanced_settings()
         
@@ -322,12 +312,15 @@ def render_main_content() -> None:
     with content_column:
         # Create tabs
         chat_tab, info_tab, images_tab = st.tabs(["Chat", "Document Info", "Images"])
-        
+
+        # Calculate images container height (0.6 * screen_height)
+        images_container_height = int(screen_height * 0.6) if main_container_dimensions else 500
+
         # Chat tab - contains the chat interface
         with chat_tab:
             # Create a scrollable container for chat
             chat_container = st.container(height=height_column_container)
-            
+
             # Display chat history
             with chat_container:
                 if current_file in st.session_state.chat_history:
@@ -473,4 +466,5 @@ def render_main_content() -> None:
         
         # Images tab
         with images_tab:
-            display_document_images(current_file)
+            display_document_images(current_file, container_height=images_container_height)
+

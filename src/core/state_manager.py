@@ -6,7 +6,10 @@ import streamlit as st
 from typing import Any, Dict, List, Set, Optional
 
 # Import from config
-from ..config import DEFAULT_MODEL, DEFAULT_CHUNK_SIZE
+from ..config import (
+    DEFAULT_MODEL, MODELS, OLLAMA_MODELS, OLLAMA_SUFFIX,
+    OPENAI_SUFFIX, CUSTOM_MODELS, CUSTOM_SUFFIX, DEFAULT_CHUNK_SIZE
+)
 
 class StateManager:
     """Centralized manager for session state variables."""
@@ -92,6 +95,21 @@ class StateManager:
         # Initialize error state
         if "display_errors" not in st.session_state:
             st.session_state["display_errors"] = {}
+
+        # Initialize model display map and display names for model selection UI
+        if 'model_display_map' not in st.session_state or 'model_display_names' not in st.session_state:
+            model_display_map = {}
+            for model in MODELS.keys():
+                if model in OLLAMA_MODELS:
+                    display_name = f"{model} {OLLAMA_SUFFIX}"
+                elif model in CUSTOM_MODELS:
+                    display_name = f"{model} {CUSTOM_SUFFIX}"
+                else:
+                    display_name = f"{model} {OPENAI_SUFFIX}"
+                model_display_map[display_name] = model
+            display_names = list(model_display_map.keys())
+            st.session_state['model_display_map'] = model_display_map
+            st.session_state['model_display_names'] = display_names
     
     # Accessor methods for common operations
     @staticmethod

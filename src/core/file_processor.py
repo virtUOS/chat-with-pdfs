@@ -35,7 +35,7 @@ class FileProcessor:
         
         Args:
             uploaded_file: The file to save
-            directory: Target directory for the saved file
+            directory: Target directory for the saved file. If None, uses TEMP_FILES_PATH from environment.
             
         Returns:
             str: Path to the saved file
