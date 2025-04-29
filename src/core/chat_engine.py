@@ -47,12 +47,33 @@ class ChatEngine:
         prompt_template_str = CITATION_PROMPT
         
         # Convert string template to PromptTemplate
+        
+        # Define custom refine prompt template
+        CUSTOM_REFINE_PROMPT_TMPL = (
+            "The original query is as follows: {query_str}\n"
+            "We have provided an existing answer: {existing_answer}\n"
+            "We have the opportunity to refine the existing answer "
+            "(only if needed) with some more context below.\n"
+            "------------\n"
+            "{context_msg}\n"
+            "------------\n"
+            "Given the new context, refine the original answer to better "
+            "answer the query. Ensure that you include citations from the new context where appropriate, "
+            "and retain any relevant citations from the original answer. Citations MUST be in the format [<number>]. "
+            "If the context isn't useful, return the original answer.\n"
+            "Refined Answer: "
+        )
+        CUSTOM_REFINE_PROMPT = PromptTemplate(
+            CUSTOM_REFINE_PROMPT_TMPL
+        )
         prompt_template = PromptTemplate(prompt_template_str)
         
         # Create response synthesizer
+        # Create response synthesizer
         response_synthesizer = get_response_synthesizer(
             response_mode=ResponseMode.COMPACT,
-            text_qa_template=prompt_template
+            text_qa_template=prompt_template,
+            refine_template=CUSTOM_REFINE_PROMPT
             # LLM will be updated at query time, no need to set it here
         )
         
@@ -131,6 +152,8 @@ class ChatEngine:
                 query_engine._response_synthesizer._llm = Settings.llm
                 Logger.info(f"Using model: {getattr(Settings.llm, 'model', str(Settings.llm))} for this query")
             
+            # Log the final prompt before execution
+            Logger.debug(f"Final prompt sent to LLM: {prompt}")
             # Execute query
             response = query_engine.query(prompt)
             
@@ -139,7 +162,9 @@ class ChatEngine:
                 synthesized_answer = response.response
             else:
                 synthesized_answer = str(response)
-            
+
+            Logger.debug(f"Raw LLM response before citation extraction: {synthesized_answer[:500].replace('\n', ' ')}")
+
             # Get source nodes if available
             source_nodes = []
             if hasattr(response, 'source_nodes'):
