@@ -59,7 +59,7 @@ class ChatEngine:
             "------------\n"
             "Given the new context, refine the original answer to better "
             "answer the query. Ensure that you include citations from the new context where appropriate, "
-            "and retain any relevant citations from the original answer. "
+            "and retain any relevant citations from the original answer. Citations MUST be in the format [<number>]. "
             "If the context isn't useful, return the original answer.\n"
             "Refined Answer: "
         )
