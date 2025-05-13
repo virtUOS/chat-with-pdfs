@@ -132,39 +132,49 @@ def create_annotations_from_sources(answer_text, sources, citation_mapping=None)
             # Only create annotation if we have a valid page number
             if page_num is not None:
                 try:
-                    # Convert page to integer if possible
                     page_num = int(page_num)
                 except (ValueError, TypeError):
-                    # Use 0 as fallback if conversion fails
-                    page_num = 0
-                # Create a border annotation for the page based on the citation
-                # Position it at the top of the page with a thin border
-                annotation = {
-                    "page": page_num,
-                    "x": 10,             # Small margin from left edge
-                    "y": 10,             # Small margin from top edge
-                    "width": 580,        # Wide enough to be clearly visible
-                    "height": 800,       # Tall enough to frame content
-                    "color": "red",      # Red border
-                    "title": f"Source [{idx}]",  # Add citation number as title
-                    "label": f"[{idx}]"  # Add label for identification
-                }
-                
-                # Create a small annotation in top-right corner with the citation number
-                citation_label = {
-                    "page": page_num,
-                    "x": 550,            # Right side of page
-                    "y": 20,             # Near top
-                    "width": 30,         # Small box for label
-                    "height": 20,
-                    "color": "red",
-                    "title": f"Source [{idx}]",  # Add citation number as title
-                    "label": f"[{idx}]"  # Add label for identification
-                }
-                
-                # Add the annotations
-                annotations.append(annotation)
-                annotations.append(citation_label)
+                    page_num = 0 # Fallback
+
+                chunk_bbox = None
+                if hasattr(source, 'node') and 'chunk_bbox' in source.node.metadata:
+                    chunk_bbox = source.node.metadata['chunk_bbox']
+                elif hasattr(source, 'metadata') and 'chunk_bbox' in source.metadata:
+                    chunk_bbox = source.metadata['chunk_bbox']
+
+                if chunk_bbox and isinstance(chunk_bbox, list) and len(chunk_bbox) == 4:
+                    # We have a precise bounding box for the chunk
+                    x0, y0, x1, y1 = chunk_bbox
+                    precise_annotation = {
+                        "page": page_num,
+                        "x": x0,
+                        "y": y0,
+                        "width": x1 - x0,
+                        "height": y1 - y0,
+                        "color": "rgba(255, 0, 0, 0.3)", # Semi-transparent red
+                        "title": f"Source [{idx}] (Chunk)",
+                        "label": f"[{idx}]"
+                    }
+                    annotations.append(precise_annotation)
+                    Logger.debug(f"Created precise annotation for source [{idx}] on page {page_num} with bbox: {chunk_bbox}")
+                else:
+                    # Fallback to page-level annotation (e.g., border or corner label)
+                    Logger.debug(f"No chunk_bbox for source [{idx}] on page {page_num}. Falling back to page-level annotation.")
+                    page_border_annotation = {
+                        "page": page_num,
+                        "x": 10,
+                        "y": 10,
+                        "width": 575, # Adjusted to avoid overlap with potential scrollbars
+                        "height": 780, # Adjusted
+                        "color": "rgba(255, 0, 0, 0.1)", # Lighter, less intrusive border
+                        "title": f"Source [{idx}] (Page)",
+                        "label": f"[{idx}]"
+                    }
+                    annotations.append(page_border_annotation)
+
+                # The small citation corner label has been removed as per user request.
+                # It was causing a persistent red box in the top right corner.
+                # If a corner label is desired in the future, it should be re-evaluated.
     
     return annotations
 
@@ -189,4 +199,13 @@ def format_source_for_display(source):
     except Exception as e:
         source_text = f"Could not extract source text: {str(e)}"
     
-    return source_text
+    # Remove leading markdown headers (e.g., #, ##, ###)
+    # and potential bolded titles followed by headers
+    # Example: "# **Title** ## Subtitle" -> "Subtitle"
+    # Example: "## Subtitle" -> "Subtitle"
+    # Example: "# Title" -> "Title"
+    source_text = re.sub(r"^(?:#\s*\*\*.*?\*\*\s*##\s*|#+\s*)", "", source_text, count=1)
+    # Fallback for simple cases or if the above didn't catch everything,
+    # e.g. if there was no space after the hash marks initially.
+    source_text = re.sub(r"^\s*#+\s*", "", source_text)
+    return source_text.strip() # Add strip here to clean any leading/trailing whitespace left
