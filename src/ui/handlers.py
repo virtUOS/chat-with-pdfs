@@ -138,8 +138,8 @@ def handle_query_submission(query_text: str, current_file: str, chat_container) 
                 st.session_state.chat_history[current_file].append({
                     "role": "assistant",
                     "content": answer,
-                    "sources": sources,
-                    "images": images,
+                    "sources": list(sources),  # Create a copy of the list
+                    "images": list(images),    # Create a copy of the list
                     "citations": citations,
                     "citation_pages": citation_pages,
                     "citation_mapping": citation_mapping,  # Use the one already extracted

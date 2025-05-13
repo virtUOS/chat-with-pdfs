@@ -217,6 +217,14 @@ class DocumentManager:
             meta = doc.get('metadata', {})
             Logger.info(f"Doc chunk {idx}: metadata keys: {list(meta.keys())}")
             Logger.info(f"Doc chunk {idx}: page metadata: {meta.get('page')}")
+            # Check for words in the document output
+            Logger.info(f"Doc chunk {idx} keys: {list(doc.keys())}")
+            if 'words' in doc:
+                Logger.info(f"Doc chunk {idx}: has {len(doc['words'])} words")
+                if len(doc['words']) > 0:
+                    Logger.info(f"Word data format sample: {doc['words'][0]}")
+            else:
+                Logger.info(f"Doc chunk {idx}: No 'words' key found")
         # Process document and images using the refactored methods
         llama_documents = DocumentManager._process_document_content(docs, pdf_id)
         
@@ -232,45 +240,103 @@ class DocumentManager:
         return vector_index, keyword_index, pdf_id
     
     @staticmethod
-    def _chunk_document_text(text, chunk_size, chunk_overlap, original_metadata):
+    def _chunk_document_text(text, chunk_size, chunk_overlap, original_metadata, words_data=None):
         """
-        Split document text into chunks while preserving word boundaries
-        and tracking image references.
+        Split document text into chunks while preserving word boundaries,
+        tracking image references, and calculating chunk bounding boxes.
         """
         import re
         import json
-        
+        import fitz # For fitz.Rect
+
         # Log input values
         Logger.debug(f"Chunking document text: {len(text)} chars, target size={chunk_size}, overlap={chunk_overlap}")
-        
+        if words_data:
+            Logger.debug(f"Received {len(words_data)} word items for bbox calculation.")
+        else:
+            Logger.debug("No word data received for bbox calculation.")
+
         # Extract image references from text
         image_references = list(re.finditer(r'!\[.*?\]\((.*?)\)', text))
         Logger.debug(f"Found {len(image_references)} image references in document")
-        
-        # Split text into words
-        words = re.findall(r'\S+|\s+', text)
+
+        # Split text into words (tokens for chunking)
+        text_tokens = re.findall(r'\S+|\s+', text)
         
         chunks = []
-        current_chunk = []
+        current_chunk_tokens = []
+        current_chunk_word_data = [] # Store corresponding word data for bbox
         current_length = 0
-        chunk_start_offset = 0
+        chunk_start_offset_chars = 0 # Character offset in the original page text
         
         # Track which image references are in which chunk
         current_chunk_images = []
         
-        for word in words:
-            # Check if adding this word would exceed chunk size
-            if current_length + len(word) > chunk_size and current_length > 0:
+        word_data_idx = 0 # To iterate through words_data
+
+        for token_idx, token in enumerate(text_tokens):
+            # Try to match token with words_data for bbox
+            token_word_data = None
+            if token.strip() and words_data: # Only process if token is not just whitespace
+                # Simple sequential matching. This assumes text_tokens and words_data are somewhat aligned.
+                # A more robust matching might be needed if they diverge significantly.
+                temp_idx = word_data_idx
+                # Logger.debug(f"Attempting to match token: '{token}' (stripped: '{token.strip()}') starting from words_data index {word_data_idx}")
+                while temp_idx < len(words_data):
+                    word_from_data = words_data[temp_idx][4].strip()
+                    # Logger.debug(f"  Comparing with word_data[{temp_idx}]: '{word_from_data}'")
+                    if word_from_data == token.strip(): # Compare stripped text
+                        token_word_data = words_data[temp_idx]
+                        # Logger.debug(f"    Exact match found: {token_word_data}")
+                        word_data_idx = temp_idx + 1 # Move to next word_data for next token
+                        break
+                    elif token.strip() in word_from_data: # Token is part of word_data
+                        token_word_data = words_data[temp_idx]
+                        # Logger.debug(f"    Partial match (token in word_data): {token_word_data}")
+                        # Don't advance word_data_idx yet, next token might be part of same word_data
+                        break
+                    # Optimization: if current token is much shorter than word_from_data, it's unlikely to be found further if not a substring
+                    # elif len(token.strip()) < len(word_from_data) and not word_from_data.startswith(token.strip()):
+                    #    pass # continue search
+                    temp_idx += 1
+                
+                # if not token_word_data and token.strip():
+                #     Logger.debug(f"Token '{token.strip()}' not matched with any word_data entry.")
+            # elif not token.strip():
+                # Logger.debug(f"Skipping word_data match for whitespace token: '{token}'")
+
+
+            # Check if adding this token would exceed chunk size
+            if current_length + len(token) > chunk_size and current_length > 0:
                 # Complete current chunk
-                chunk_text = ''.join(current_chunk)
+                chunk_text = ''.join(current_chunk_tokens)
                 
                 # Create metadata for this chunk, copy from original
                 chunk_metadata = original_metadata.copy()
-                # Add chunk-specific metadata
+                
+                # Calculate chunk_bbox
+                chunk_bbox = None
+                if current_chunk_word_data:
+                    # Union of all bboxes in current_chunk_word_data
+                    final_rect = fitz.Rect() # Empty rect
+                    for wd in current_chunk_word_data:
+                        try:
+                            # wd[0:4] are x0, y0, x1, y1
+                            word_rect = fitz.Rect(wd[0], wd[1], wd[2], wd[3])
+                            if final_rect.is_empty:
+                                final_rect = word_rect
+                            else:
+                                final_rect.include_rect(word_rect)
+                        except Exception as e:
+                            Logger.warning(f"Could not form Rect from word data {wd}: {e}")
+                    if not final_rect.is_empty:
+                         chunk_bbox = [final_rect.x0, final_rect.y0, final_rect.x1, final_rect.y1]
+
                 chunk_metadata.update({
-                    "chunk_start_offset": chunk_start_offset,
-                    "chunk_end_offset": chunk_start_offset + len(chunk_text),
+                    "chunk_start_offset": chunk_start_offset_chars,
+                    "chunk_end_offset": chunk_start_offset_chars + len(chunk_text),
                     "is_partial_page": True,
+                    "chunk_bbox": chunk_bbox
                 })
                 
                 # Add to chunks list
@@ -281,42 +347,73 @@ class DocumentManager:
                 })
                 
                 # Start new chunk with overlap
-                overlap_start = max(0, len(current_chunk) - chunk_overlap // len(word) if word else 1)
-                current_chunk = current_chunk[overlap_start:]
-                current_length = sum(len(w) for w in current_chunk)
-                chunk_start_offset += overlap_start
+                # Calculate overlap in terms of tokens
+                approx_chars_per_token = current_length / len(current_chunk_tokens) if current_chunk_tokens else 1
+                overlap_token_count = int(chunk_overlap / approx_chars_per_token) if approx_chars_per_token > 0 else 0
+                
+                overlap_start_token_idx = max(0, len(current_chunk_tokens) - overlap_token_count)
+
+                # Recalculate character offset for the new chunk based on tokens kept for overlap
+                new_chunk_start_offset_chars = chunk_start_offset_chars
+                for i in range(overlap_start_token_idx):
+                    new_chunk_start_offset_chars += len(current_chunk_tokens[i])
+
+                current_chunk_tokens = current_chunk_tokens[overlap_start_token_idx:]
+                current_chunk_word_data = current_chunk_word_data[overlap_start_token_idx:] # Align word data with tokens
+                current_length = sum(len(w) for w in current_chunk_tokens)
+                chunk_start_offset_chars = new_chunk_start_offset_chars
                 
                 # Update images for new chunk
                 current_chunk_images = [img for img in current_chunk_images
-                                      if img["offset"] >= chunk_start_offset]
+                                      if img["offset"] >= chunk_start_offset_chars]
             
-            # Add word to current chunk
-            current_chunk.append(word)
-            current_length += len(word)
+            # Add token to current chunk
+            current_chunk_tokens.append(token)
+            if token_word_data:
+                current_chunk_word_data.append(token_word_data)
+            current_length += len(token)
             
-            # Check if this word contains or completes an image reference
-            word_end_offset = chunk_start_offset + current_length
+            # Check if this token contains or completes an image reference
+            # Image offset is relative to the start of the page text
+            token_end_char_offset_in_page = chunk_start_offset_chars + current_length
             
             for img_ref in image_references:
-                if (chunk_start_offset <= img_ref.start() < word_end_offset and
+                if (chunk_start_offset_chars <= img_ref.start() < token_end_char_offset_in_page and
                     not any(img["offset"] == img_ref.start() for img in current_chunk_images)):
-                    # This image reference starts in the current word
+                    # This image reference starts within the current token's span in the page
                     img_path = img_ref.group(1).strip()
                     current_chunk_images.append({
                         "file_path": img_path,
-                        "offset": img_ref.start(),
+                        "offset": img_ref.start(), # Store original offset from page start
                         "page": original_metadata.get("page")
                     })
                     Logger.debug(f"Added image {img_path} to chunk at offset {img_ref.start()}")
         
         # Don't forget the last chunk
-        if current_chunk:
-            chunk_text = ''.join(current_chunk)
+        if current_chunk_tokens:
+            chunk_text = ''.join(current_chunk_tokens)
             chunk_metadata = original_metadata.copy()
+
+            chunk_bbox = None
+            if current_chunk_word_data:
+                final_rect = fitz.Rect()
+                for wd in current_chunk_word_data:
+                    try:
+                        word_rect = fitz.Rect(wd[0], wd[1], wd[2], wd[3])
+                        if final_rect.is_empty:
+                            final_rect = word_rect
+                        else:
+                            final_rect.include_rect(word_rect)
+                    except Exception as e:
+                        Logger.warning(f"Could not form Rect from word data {wd} for last chunk: {e}")
+                if not final_rect.is_empty:
+                    chunk_bbox = [final_rect.x0, final_rect.y0, final_rect.x1, final_rect.y1]
+            
             chunk_metadata.update({
-                "chunk_start_offset": chunk_start_offset,
-                "chunk_end_offset": chunk_start_offset + len(chunk_text),
-                "is_partial_page": True
+                "chunk_start_offset": chunk_start_offset_chars,
+                "chunk_end_offset": chunk_start_offset_chars + len(chunk_text),
+                "is_partial_page": True,
+                "chunk_bbox": chunk_bbox
             })
             
             chunks.append({
@@ -453,7 +550,8 @@ class DocumentManager:
                     document["text"],
                     chunk_size,
                     chunk_overlap,
-                    document["metadata"]
+                    document["metadata"],
+                    words_data=document.get("words") # Pass word data
                 )
                 
                 # Process each chunk using the already extracted image references
@@ -533,18 +631,32 @@ class DocumentManager:
                             
                             # Create metadata for this chunk
                             metadata = chunk["metadata"].copy()
-                            metadata["images"] = images_json
+                            metadata["images"] = images_json # This is JSON string of image dicts
+                            
+                            # Define original_page_num before using it in the log
+                            original_page_num_for_log = chunk["metadata"].get("page", "unknown")
+
+                            # Populate 'image_paths' for compatibility with _extract_images_from_sources
+                            if unified_images: # unified_images is a list of dicts for this chunk
+                                metadata["image_paths"] = [img_info["file_path"] for img_info in unified_images if img_info.get("file_path")]
+                                Logger.debug(f"    Chunk {i} (page {original_page_num_for_log}) assigned image_paths: {metadata.get('image_paths')} for text: '{chunk['text'][:70].replace(chr(10), ' ')}...'")
+                            else:
+                                Logger.debug(f"    Chunk {i} (page {original_page_num_for_log}) has NO unified_images, so no image_paths assigned for text: '{chunk['text'][:70].replace(chr(10), ' ')}...'")
                             metadata["document_id"] = pdf_id
                             metadata["chunk_number"] = i
                             metadata["chunk_total"] = len(chunks)
                             
                             # Create LlamaDocument for chunk
+                            # Ensure metadata has page_num correctly from the original document metadata
+                            original_page_num = chunk["metadata"].get("page", "unknown")
+                            chunk_doc_id = f"{pdf_id}_page{original_page_num}_chunk{i}"
                             llama_document = LlamaDocument(
+                                id_=chunk_doc_id,
                                 text=chunk["text"],
-                                metadata=metadata,
+                                metadata=metadata, # metadata already contains page, chunk_number, etc.
                                 text_template="Metadata: {metadata_str}\n-----\nContent: {content}",
                             )
-                            
+                            Logger.debug(f"Created LlamaDocument chunk with id_: {chunk_doc_id}, text length: {len(chunk['text'])}, bbox: {metadata.get('chunk_bbox')}")
                             llama_documents.append(llama_document)
                         img_path = match.group(1).strip()
                         start_offset = match.start() + chunk["metadata"].get("chunk_start_offset", 0)
@@ -677,344 +789,99 @@ class DocumentManager:
                     
                     llama_documents.append(llama_document)
             else:
-                # Page is small enough to be a single chunk, use original processing
-                # Set up image tracking
-                image_paths_dict = {}
-                image_refs = []
+                # Page is small enough to be a single chunk
+                Logger.debug(f"Page {page_num} does not need chunking: {text_len} chars <= {chunk_size} threshold")
                 
-                # Extract Markdown image references from text (once only)
-                markdown_images = list(re.finditer(r'!\[.*?\]\((.*?)\)', document["text"]))
-                Logger.info(f"Found {len(markdown_images)} Markdown image references in text on page {page_num}")
+                current_page_image_paths_dict = {}
+                current_page_markdown_captions = {}
+
+                if document.get("text"):
+                    page_md_images = list(re.finditer(r'!\[.*?\]\((.*?)\)', document["text"]))
+                    for idx, match_obj in enumerate(page_md_images):
+                        current_page_image_paths_dict[idx] = match_obj.group(1).strip()
+
+                    page_md_images_for_captions = list(re.finditer(r'!\[(.*?)]\((.*?)\)', document["text"]))
+                    for match_obj_cap in page_md_images_for_captions:
+                        img_filename_cap = os.path.basename(match_obj_cap.group(2).strip())
+                        current_page_markdown_captions[img_filename_cap] = {
+                            "caption": match_obj_cap.group(1).strip(),
+                            "offset": match_obj_cap.start()
+                        }
                 
-                # Process each image reference
-                for match in markdown_images:
-                    img_path = match.group(1).strip()
-                    start_offset = match.start()
-                    Logger.info(f"Processing image reference: {img_path}")
-
-                    # Look for caption immediately after image link
-                    caption = ""
-                    # Get text after image link
-                    after = document["text"][match.end():]
-                    # Split into lines
-                    lines = after.splitlines()
-                    caption_lines = []
-                    caption_started = False
-                    max_caption_length = 300
-                    skip_blank_lines = True
-                    for line in lines:
-                        line = line.strip()
-                        # Skip initial empty, ellipsis, or page number lines after image link
-                        if skip_blank_lines and (not line or line == '...' or re.match(r'^\d{1,4}$', line)):
-                            continue
-                        skip_blank_lines = False  # stop skipping once a non-empty, non-page-number line is found
-                        # Stop if empty or ellipsis line after caption started
-                        if caption_started and (not line or line == '...'):
-                            break
-                        # Stop if new section header
-                        if re.match(r'^(#|##|\s*INTRODUCTION|ABSTRACT|REFERENCES|ACKNOWLEDGMENTS)', line, re.IGNORECASE):
-                            break
-                        # Heuristic: caption start if matches or is short
-                        if (re.match(r'^(Figure|Fig\.|Table|Diagram|Chart|Image|Photo)', line, re.IGNORECASE)
-                            or (len(line) > 0 and len(line) < 200)):
-                            caption_lines.append(line)
-                            caption_started = True
-                        elif caption_started:
-                            # After caption start, append more lines
-                            caption_lines.append(line)
-                        # Stop if caption too long
-                        if sum(len(l) for l in caption_lines) > max_caption_length:
-                            break
-                    caption = ' '.join(caption_lines).strip()
-                    if caption:
-                        Logger.info(f"Extracted caption: '{caption[:100]}...' on page {page_num}")
-                    else:
-                        Logger.info(f"No caption found after image link on page {page_num}")
-
-                    image_refs.append({
-                        "file_path": img_path,  # Use consistent key 'file_path'
-                        "caption": caption,
-                        "offset": start_offset
-                    })
-                    Logger.info(f"Added image reference with caption: '{caption}'")
-                    # Convert to absolute path if relative
-                    abs_img_path = img_path
-                    if not os.path.isabs(img_path):
-
-                        abs_img_path = os.path.join(os.getcwd(), img_path)
-                    
-                    # Check if image exists
-                    if os.path.exists(abs_img_path) or os.path.exists(img_path):
-                        # Use the absolute path if it exists, otherwise use the original path
-                        path_to_use = abs_img_path if os.path.exists(abs_img_path) else img_path
-                        # Add to image_paths
-                        if path_to_use not in image_paths:
-                            image_paths.append(path_to_use)
-                            Logger.debug(f"Found image path in text: {path_to_use}")
-                        
-                        # Extract the image number from the filename
-                        try:
-                            # Pattern is usually: filename-page-index.jpg
-                            idx_part = img_path.split('-')[-1].split('.')[0]
-                            img_index = int(idx_part)
-                            image_paths_dict[img_index] = img_path
-                        except Exception as e:
-                            Logger.debug(f"Error extracting image index from {img_path}: {e}")
-                            # If we can't extract the index, just store by position
-                            image_paths_dict[len(image_paths_dict)] = img_path
-                
-                # Process images to make them JSON serializable
-                # Unify images and image_refs into one metadata list
-                unified_images = []
-
-                # Build a map of markdown captions by filename (basename)
-                markdown_captions = {}
-                for ref in image_refs:
-                    filename = os.path.basename(ref["file_path"])
-                    markdown_captions[filename] = {
-                        "caption": ref.get("caption", ""),
-                        "offset": ref.get("offset", -1)
-                    }
-
-                # Add images from PDF metadata, assign captions if available
-                if document.get("images"):
-                    for i, img in enumerate(document.get("images")):
-                        img_entry = {}
-                        for key, value in img.items():
-                            img_entry[key] = value
-
-                        # Add the file path based on the image position within the current page
-                        img_path = None
-                        img_position = i
-                        if img_position in image_paths_dict:
-                            img_path = image_paths_dict[img_position]
-                        elif len(image_paths_dict) == 1:
-                            img_path = list(image_paths_dict.values())[0]
-                        elif image_paths_dict:
-                            pass  # no match
+                unified_images_for_page = []
+                if "images" in document and document["images"]:
+                    for img_idx, img_info_raw in enumerate(document["images"]):
+                        img_entry = serialize_rects(img_info_raw)
+                        img_path = current_page_image_paths_dict.get(img_idx)
 
                         if img_path:
                             if not os.path.isabs(img_path) and os.path.exists(os.path.join(os.getcwd(), img_path)):
                                 img_entry['file_path'] = os.path.join(os.getcwd(), img_path)
-                            else:
+                            elif os.path.exists(img_path):
                                 img_entry['file_path'] = img_path
-
-                        # Assign caption if markdown reference exists for this filename
+                        
                         filename = os.path.basename(img_entry.get('file_path', ''))
-                        caption_info = markdown_captions.get(filename)
-                        if caption_info:
-                            img_entry['caption'] = caption_info.get('caption', '')
-                            img_entry['offset'] = caption_info.get('offset', -1)
-                        else:
-                            # Otherwise, empty caption and offset
-                            img_entry['caption'] = ""
-                            img_entry['offset'] = -1
-
-                        unified_images.append(img_entry)
-
-                # Store unified images for this page
-                # Add page number to each image from document metadata
-                page_num = document["metadata"].get("page")
-                if page_num is not None:
-                    for img in unified_images:
-                        img['page'] = int(page_num)
+                        if filename in current_page_markdown_captions:
+                            img_entry['caption'] = current_page_markdown_captions[filename].get('caption', img_entry.get('caption', ''))
+                        
+                        if 'page' not in img_entry or img_entry.get('page') is None:
+                            img_entry['page'] = page_num
+                            
+                        unified_images_for_page.append(img_entry)
                 
-                # Collect all unified images
-                all_unified_images.extend(unified_images)
+                for u_img in unified_images_for_page:
+                    if u_img.get('file_path') and not any(
+                        existing_img.get('file_path') == u_img['file_path']
+                        for existing_img in all_unified_images if existing_img.get('file_path') is not None
+                    ):
+                        all_unified_images.append(u_img)
                 
-                try:
-                    images_json = json.dumps(serialize_rects(unified_images))
-                except Exception as e:
-                    Logger.warning(f"Could not serialize unified images: {e}")
-                    images_json = "[]"
-                
-                # Create metadata
-                metadata = {
-                    "page": int(document["metadata"].get("page")) if document["metadata"].get("page") is not None else None,
-                    "images": images_json,
-                    "toc_items": str(document.get("toc_items")),
-                    "title": str(document["metadata"].get("title")),
-                    "author": str(document["metadata"].get("author")),
-                    "keywords": str(document["metadata"].get("keywords")),
-                    "document_id": pdf_id,  # Add document ID to track which document this is from
-                }
-                
-                # Create a Document object with just the text and the cleaned metadata
-                llama_document = LlamaDocument(
-                    text=document["text"],
-                    metadata=metadata,
-                    text_template="Metadata: {metadata_str}\n-----\nContent: {content}",
-                )
-                
-                llama_documents.append(llama_document)
+                doc_metadata = document.get("metadata", {}).copy()
+                doc_metadata["images"] = json.dumps(serialize_rects(unified_images_for_page))
 
-            # Extract Markdown image references from text
-            markdown_images = list(re.finditer(r'!\[.*?\]\((.*?)\)', document["text"]))
-            image_paths_dict = {}
-            image_refs = []
-            
-            Logger.info(f"Found {len(markdown_images)} Markdown image references in text on page {page_num}")
+                page_bbox = None
+                page_words_data = document.get("words")
 
-            for match in markdown_images:
-                img_path = match.group(1).strip()
-                start_offset = match.start()
-                Logger.info(f"Processing image reference: {img_path}")
-
-                # Look for caption immediately after image link
-                caption = ""
-                # Get text after image link
-                after = document["text"][match.end():]
-                # Split into lines
-                lines = after.splitlines()
-                caption_lines = []
-                caption_started = False
-                max_caption_length = 300
-                skip_blank_lines = True
-                for line in lines:
-                    line = line.strip()
-                    # Skip initial empty, ellipsis, or page number lines after image link
-                    if skip_blank_lines and (not line or line == '...' or re.match(r'^\d{1,4}$', line)):
-                        continue
-                    skip_blank_lines = False  # stop skipping once a non-empty, non-page-number line is found
-                    # Stop if empty or ellipsis line after caption started
-                    if caption_started and (not line or line == '...'):
-                        break
-                    # Stop if new section header
-                    if re.match(r'^(#|##|\s*INTRODUCTION|ABSTRACT|REFERENCES|ACKNOWLEDGMENTS)', line, re.IGNORECASE):
-                        break
-                    # Heuristic: caption start if matches or is short
-                    if (re.match(r'^(Figure|Fig\.|Table|Diagram|Chart|Image|Photo)', line, re.IGNORECASE)
-                        or (len(line) > 0 and len(line) < 200)):
-                        caption_lines.append(line)
-                        caption_started = True
-                    elif caption_started:
-                        # After caption start, append more lines
-                        caption_lines.append(line)
-                    # Stop if caption too long
-                    if sum(len(l) for l in caption_lines) > max_caption_length:
-                        break
-                caption = ' '.join(caption_lines).strip()
-                if caption:
-                    Logger.info(f"Extracted caption: '{caption[:100]}...' on page {page_num}")
+                if page_words_data:
+                    Logger.debug(f"Page {page_num} (not chunked): Attempting to calculate bbox from {len(page_words_data)} words.")
+                    final_rect = fitz.Rect() # Requires: import fitz at the top of the file or class
+                    for wd in page_words_data:
+                        try:
+                            # wd is expected to be a list/tuple like (x0, y0, x1, y1, word_text, ...)
+                            word_rect = fitz.Rect(wd[0], wd[1], wd[2], wd[3])
+                            if final_rect.is_empty:
+                                final_rect = word_rect
+                            else:
+                                final_rect.include_rect(word_rect)
+                        except Exception as e:
+                            Logger.warning(f"Page {page_num} (not chunked): Could not form Rect from word data {wd}: {e}")
+                    if not final_rect.is_empty:
+                        page_bbox = [final_rect.x0, final_rect.y0, final_rect.x1, final_rect.y1]
+                        Logger.debug(f"Page {page_num} (not chunked) calculated bbox from words: {page_bbox}")
+                
+                if not page_bbox: # Fallback if words_data not present or bbox calculation failed
+                    raw_rect_data = doc_metadata.get("rect")
+                    if isinstance(raw_rect_data, (list, tuple)) and len(raw_rect_data) == 4:
+                        page_bbox = list(raw_rect_data)
+                        Logger.debug(f"Page {page_num} (not chunked) using 'rect' metadata for bbox: {page_bbox}")
+                    elif isinstance(doc_metadata.get("mediabox"), (list, tuple)) and len(doc_metadata["mediabox"]) == 4:
+                        page_bbox = list(doc_metadata["mediabox"])
+                        Logger.debug(f"Page {page_num} (not chunked) using 'mediabox' metadata for bbox: {page_bbox}")
+                
+                doc_metadata["chunk_bbox"] = page_bbox # page_bbox will be None if all attempts failed
+                if page_bbox:
+                    Logger.debug(f"Page {page_num} (not chunked) final chunk_bbox: {page_bbox}")
                 else:
-                    Logger.info(f"No caption found after image link on page {page_num}")
-
-                image_refs.append({
-                    "file_path": img_path,  # Use consistent key 'file_path'
-                    "caption": caption,
-                    "offset": start_offset
-                })
-                Logger.info(f"Added image reference with caption: '{caption}'")
-                # Convert to absolute path if relative
-                abs_img_path = img_path
-                if not os.path.isabs(img_path):
-
-                    abs_img_path = os.path.join(os.getcwd(), img_path)
+                    Logger.debug(f"Page {page_num} (not chunked) could not determine page bbox. Raw rect: {doc_metadata.get('rect')}, Raw mediabox: {doc_metadata.get('mediabox')}")
                 
-                # Check if image exists
-                if os.path.exists(abs_img_path) or os.path.exists(img_path):
-                    # Use the absolute path if it exists, otherwise use the original path
-                    path_to_use = abs_img_path if os.path.exists(abs_img_path) else img_path
-                    # Add to image_paths
-                    if path_to_use not in image_paths:
-                        image_paths.append(path_to_use)
-                        Logger.debug(f"Found image path in text: {path_to_use}")
-                    
-                    # Extract the image number from the filename
-                    try:
-                        # Pattern is usually: filename-page-index.jpg
-                        idx_part = img_path.split('-')[-1].split('.')[0]
-                        img_index = int(idx_part)
-                        image_paths_dict[img_index] = img_path
-                    except Exception as e:
-                        Logger.debug(f"Error extracting image index from {img_path}: {e}")
-                        # If we can't extract the index, just store by position
-                        image_paths_dict[len(image_paths_dict)] = img_path
-            
-            # Process images to make them JSON serializable
-            # Unify images and image_refs into one metadata list
-            unified_images = []
-
-            # Build a map of markdown captions by filename (basename)
-            markdown_captions = {}
-            for ref in image_refs:
-                filename = os.path.basename(ref["file_path"])
-                markdown_captions[filename] = {
-                    "caption": ref.get("caption", ""),
-                    "offset": ref.get("offset", -1)
-                }
-
-            # Add images from PDF metadata, assign captions if available
-            if document.get("images"):
-                for i, img in enumerate(document.get("images")):
-                    img_entry = {}
-                    for key, value in img.items():
-                        img_entry[key] = value
-
-                    # Add the file path based on the image position within the current page
-                    img_path = None
-                    img_position = i
-                    if img_position in image_paths_dict:
-                        img_path = image_paths_dict[img_position]
-                    elif len(image_paths_dict) == 1:
-                        img_path = list(image_paths_dict.values())[0]
-                    elif image_paths_dict:
-                        pass  # no match
-
-                    if img_path:
-                        if not os.path.isabs(img_path) and os.path.exists(os.path.join(os.getcwd(), img_path)):
-                            img_entry['file_path'] = os.path.join(os.getcwd(), img_path)
-                        else:
-                            img_entry['file_path'] = img_path
-
-                    # Assign caption if markdown reference exists for this filename
-                    filename = os.path.basename(img_entry.get('file_path', ''))
-                    caption_info = markdown_captions.get(filename)
-                    if caption_info:
-                        img_entry['caption'] = caption_info.get('caption', '')
-                        img_entry['offset'] = caption_info.get('offset', -1)
-                    else:
-                        # Otherwise, empty caption and offset
-                        img_entry['caption'] = ""
-                        img_entry['offset'] = -1
-
-                    unified_images.append(img_entry)
-
-            # Store unified images for this page
-            # Add page number to each image from document metadata
-            page_num = document["metadata"].get("page")
-            if page_num is not None:
-                for img in unified_images:
-                    img['page'] = int(page_num)
-            
-            # Collect all unified images from all pages with deduplication
-            if 'all_unified_images' not in locals():
-                all_unified_images = []
-                
-            # Only add unique images by file path
-            for img in unified_images:
-                if img.get('file_path') and not any(
-                    existing.get('file_path') == img.get('file_path')
-                    for existing in all_unified_images
-                ):
-                    all_unified_images.append(img)
-            
-            try:
-                images_json = json.dumps(serialize_rects(unified_images))
-            except Exception as e:
-                Logger.warning(f"Could not serialize unified images: {e}")
-                images_json = "[]"
-            
-            # Create metadata
-            metadata = {
-                "page": int(document["metadata"].get("page")) if document["metadata"].get("page") is not None else None,
-                "images": images_json,
-                "toc_items": str(document.get("toc_items")),
-                "title": str(document["metadata"].get("title")),
-                "author": str(document["metadata"].get("author")),
-                "keywords": str(document["metadata"].get("keywords")),
-                "document_id": pdf_id,  # Add document ID to track which document this is from
-            }
+                llama_doc = LlamaDocument(
+                    id_=f"{pdf_id}_page_{page_num}", # Use id_ for the node's unique identifier
+                    text=document["text"],
+                    metadata=doc_metadata, # metadata already contains page number
+                    # doc_id=f"{pdf_id}_page_{page_num}" # doc_id is for relating to parent, id_ is node id
+                )
+                Logger.debug(f"Created LlamaDocument (non-chunked) with id_: {llama_doc.id_}, text length: {len(document['text'])}, bbox: {doc_metadata.get('chunk_bbox')}")
+                llama_documents.append(llama_doc)
             
             # Create a Document object with just the text and the cleaned metadata
             llama_document = LlamaDocument(
@@ -1062,16 +929,42 @@ class DocumentManager:
         Returns:
             tuple: (vector_index, keyword_index)
         """
-        # Create the vector index
+        from llama_index.core import Settings, StorageContext
+        from llama_index.core.node_parser import SentenceSplitter # Import SentenceSplitter
+        # SimpleDocumentStore is already imported at the top of the file from llama_index.core.storage.docstore
+
+        Logger.info(f"Creating vector database for document {pdf_id} with {len(documents)} document chunks...")
+
+        docstore = SimpleDocumentStore()
+        docstore.add_documents(documents)
+        
+        storage_context = StorageContext.from_defaults(docstore=docstore)
+        
+        noop_text_splitter = SentenceSplitter(
+            chunk_size=4096,
+            chunk_overlap=0,
+            include_metadata=True,
+            include_prev_next_rel=False
+        )
+
+        vector_transformations = [noop_text_splitter, Settings.embed_model]
+        
         vector_index = VectorStoreIndex.from_documents(
             documents,
-            docstore=SimpleDocumentStore(),
+            storage_context=storage_context,
+            transformations=vector_transformations,
             show_progress=True
         )
         
-        # Create a keyword index
-        keyword_index = SimpleKeywordTableIndex.from_documents(documents)
+        keyword_transformations = [noop_text_splitter]
+        keyword_index = SimpleKeywordTableIndex.from_documents(
+            documents,
+            storage_context=storage_context,
+            transformations=keyword_transformations,
+            show_progress=True
+        )
         
+        Logger.info(f"Vector and keyword indexes created for document {pdf_id}")
         return vector_index, keyword_index
     
     @staticmethod
