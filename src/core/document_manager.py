@@ -6,6 +6,9 @@ Handles document processing, storage, and retrieval.
 import os
 import uuid
 import time
+import re
+import fitz
+import json
 import streamlit as st
 
 from llama_index.core import Document as LlamaDocument
@@ -14,7 +17,6 @@ from llama_index.core.storage.docstore import SimpleDocumentStore
 
 
 def serialize_rects(obj):
-    import fitz
     if isinstance(obj, fitz.Rect):
         return [obj.x0, obj.y0, obj.x1, obj.y1]
     elif isinstance(obj, dict):
@@ -245,9 +247,6 @@ class DocumentManager:
         Split document text into chunks while preserving word boundaries,
         tracking image references, and calculating chunk bounding boxes.
         """
-        import re
-        import json
-        import fitz # For fitz.Rect
 
         # Log input values
         Logger.debug(f"Chunking document text: {len(text)} chars, target size={chunk_size}, overlap={chunk_overlap}")
@@ -436,8 +435,6 @@ class DocumentManager:
         Returns:
             list: Llama index documents
         """
-        import re
-        import json
 
         # Get configured chunk size from state manager
         chunk_size = StateManager.get_chunk_size()
@@ -458,7 +455,7 @@ class DocumentManager:
             # DEBUG: Log chunk info
             page_num = document.get('metadata', {}).get('page')
             text_len = len(document.get('text', ''))
-            preview = document.get('text', '')[:100].replace('\n', ' ')
+            preview = document.get('text', '')[:50].replace('\n', ' ')
             Logger.info(f"Document page: {page_num}, length: {text_len}, preview: {preview}")
             
             # Determine if chunking is needed for this page
