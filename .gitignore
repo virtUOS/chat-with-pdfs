@@ -16,6 +16,7 @@ temp_files/
 tmp_assets/
 VectorStore/
 backup_obsolete_files/
+backup_code/
 test_files/
 
 # Roo/Memory Bank related
