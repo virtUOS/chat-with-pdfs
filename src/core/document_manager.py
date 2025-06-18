@@ -425,6 +425,71 @@ class DocumentManager:
         return chunks
     
     @staticmethod
+    def _extract_images_and_captions(document_text, page_num):
+
+        image_refs = []
+
+        markdown_images = list(re.finditer(r'!\[.*?\]\((.*?)\)', document_text))
+        Logger.info(f"Found {len(markdown_images)} Markdown image references on page {page_num} before chunking")
+
+
+        for match in markdown_images:
+            img_path = match.group(1).strip()
+            start_offset = match.start()
+
+            # Look for caption immediately after image link
+            caption = ""
+            after = document_text[match.end():]
+            lines = after.splitlines()
+            caption_lines = []
+            caption_started = False
+            max_caption_length = 300
+            skip_blank_lines = True
+            
+            for line in lines:
+                line = line.strip()
+                if skip_blank_lines and (not line or line == '...' or re.match(r'^\d{1,4}$', line)):
+                    continue
+                skip_blank_lines = False
+                if caption_started and (not line or line == '...'):
+                    break
+                if re.match(r'^(#|##|\s*INTRODUCTION|ABSTRACT|REFERENCES|ACKNOWLEDGMENTS)', line, re.IGNORECASE):
+                    break
+                if (re.match(r'^(Figure|Fig\.|Table|Diagram|Chart|Image|Photo)', line, re.IGNORECASE)
+                    or (len(line) > 0 and len(line) < 200)):
+                    caption_lines.append(line)
+                    caption_started = True
+                elif caption_started:
+                    caption_lines.append(line)
+                if sum(len(l) for l in caption_lines) > max_caption_length:
+                    break
+            
+            caption = ' '.join(caption_lines).strip()
+            if caption:
+                Logger.info(f"Extracted caption: '{caption[:100]}...' on page {page_num}")
+            else:
+                Logger.info(f"No caption found after image link on page {page_num}")
+
+            # Store image reference info
+            image_refs.append({
+                "file_path": img_path,
+                "caption": caption,
+                "offset": start_offset
+            })
+
+            # Build a map of markdown captions by filename for later use
+            markdown_captions = {}
+            for ref in image_refs:
+                filename = os.path.basename(ref["file_path"])
+                markdown_captions[filename] = {
+                    "caption": ref.get("caption", ""),
+                    "offset": ref.get("offset", -1)
+                }
+            
+
+
+    
+    @staticmethod
     def _process_document_content(docs, pdf_id):
         """Process document content extracted from PDF with configurable chunk sizes.
         
@@ -457,6 +522,12 @@ class DocumentManager:
             text_len = len(document.get('text', ''))
             preview = document.get('text', '')[:50].replace('\n', ' ')
             Logger.info(f"Document page: {page_num}, length: {text_len}, preview: {preview}")
+
+            document_text = document.get("text", "")
+
+            if document_text:
+                DocumentManager._extract_images_and_captions(document_text, page_num)
+
             
             # Determine if chunking is needed for this page
             if text_len > chunk_size:
@@ -465,54 +536,9 @@ class DocumentManager:
                 
                 # Extract Markdown image references once from the original document
                 image_paths_dict = {}
-                image_refs = []
-                markdown_images = list(re.finditer(r'!\[.*?\]\((.*?)\)', document["text"]))
-                Logger.info(f"Found {len(markdown_images)} Markdown image references on page {page_num} before chunking")
                 
                 # Process all image references from the original document
                 for match in markdown_images:
-                    img_path = match.group(1).strip()
-                    start_offset = match.start()
-                    
-                    # Look for caption immediately after image link
-                    caption = ""
-                    after = document["text"][match.end():]
-                    lines = after.splitlines()
-                    caption_lines = []
-                    caption_started = False
-                    max_caption_length = 300
-                    skip_blank_lines = True
-                    
-                    for line in lines:
-                        line = line.strip()
-                        if skip_blank_lines and (not line or line == '...' or re.match(r'^\d{1,4}$', line)):
-                            continue
-                        skip_blank_lines = False
-                        if caption_started and (not line or line == '...'):
-                            break
-                        if re.match(r'^(#|##|\s*INTRODUCTION|ABSTRACT|REFERENCES|ACKNOWLEDGMENTS)', line, re.IGNORECASE):
-                            break
-                        if (re.match(r'^(Figure|Fig\.|Table|Diagram|Chart|Image|Photo)', line, re.IGNORECASE)
-                            or (len(line) > 0 and len(line) < 200)):
-                            caption_lines.append(line)
-                            caption_started = True
-                        elif caption_started:
-                            caption_lines.append(line)
-                        if sum(len(l) for l in caption_lines) > max_caption_length:
-                            break
-                    
-                    caption = ' '.join(caption_lines).strip()
-                    if caption:
-                        Logger.info(f"Extracted caption: '{caption[:100]}...' on page {page_num}")
-                    else:
-                        Logger.info(f"No caption found after image link on page {page_num}")
-                    
-                    # Store image reference info
-                    image_refs.append({
-                        "file_path": img_path,
-                        "caption": caption,
-                        "offset": start_offset
-                    })
                     
                     # Process file path
                     abs_img_path = img_path
@@ -533,14 +559,7 @@ class DocumentManager:
                             Logger.debug(f"Error extracting image index from {img_path}: {e}")
                             image_paths_dict[len(image_paths_dict)] = img_path
                 
-                # Build a map of markdown captions by filename for later use
-                markdown_captions = {}
-                for ref in image_refs:
-                    filename = os.path.basename(ref["file_path"])
-                    markdown_captions[filename] = {
-                        "caption": ref.get("caption", ""),
-                        "offset": ref.get("offset", -1)
-                    }
+                
                 
                 # Now create chunks
                 chunks = DocumentManager._chunk_document_text(
