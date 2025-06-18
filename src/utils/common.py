@@ -9,8 +9,9 @@ import streamlit as st
 
 from llama_index.core import Settings
 from llama_index.llms.openai import OpenAI
+from llama_index.llms.openai_like import OpenAILike
 
-from ..config import MODELS, DEFAULT_MODEL, OLLAMA_MODELS, CUSTOM_MODELS, OLLAMA_ENDPOINT
+from ..config import MODELS, DEFAULT_MODEL, OLLAMA_MODELS, CUSTOM_MODELS, OLLAMA_ENDPOINT, CUSTOM_API_ENDPOINT, CUSTOM_API_KEY
 from ..utils.logger import Logger
 
 def generate_unique_component_key(prefix, component_type, identifier, context=None):
@@ -99,17 +100,18 @@ def initialize_llm_settings():
             llm = OpenAI(model=DEFAULT_MODEL, temperature=temperature)
     elif model_name in CUSTOM_MODELS:
         try:
-            from ..config import CUSTOM_API_ENDPOINT
-            Logger.info(f"Initializing custom OpenAI-compatible model: {model_name} at {CUSTOM_API_ENDPOINT}")
-            # Use OpenAI with custom endpoint
-            llm = OpenAI(
+            Logger.info(f"Initializing OpenAI-like model for vLLM: {model_name} at {CUSTOM_API_ENDPOINT}")
+            # Use OpenAI-like client for vLLM with authentication
+            llm = OpenAILike(
                 model=model_name,
+                api_base=CUSTOM_API_ENDPOINT,
+                api_key=CUSTOM_API_KEY,
                 temperature=temperature,
-                api_base=CUSTOM_API_ENDPOINT
+                is_chat_model=True
             )
-            Logger.info(f"[LLM INIT] Custom OpenAI-compatible LLM instance created: {llm}")
+            Logger.info(f"[LLM INIT] OpenAI-like vLLM LLM instance created: {llm}")
         except Exception as e:
-            Logger.error(f"Failed to initialize custom model: {e}")
+            Logger.error(f"Failed to initialize OpenAI-like vLLM model: {e}")
             # Fallback to default OpenAI
             llm = OpenAI(model=DEFAULT_MODEL, temperature=temperature)
     else:
