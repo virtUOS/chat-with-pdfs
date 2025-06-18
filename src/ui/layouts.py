@@ -216,17 +216,6 @@ def render_sidebar() -> None:
             on_change=handle_settings_change
         )
                 
-        # Clear chat button - only show if there's chat history for the current document
-        current_file = st.session_state.get('current_file')
-        has_chat_history = (current_file and
-                           current_file in st.session_state.get('chat_history', {}) and
-                           len(st.session_state.chat_history[current_file]) > 0)
-        
-        if has_chat_history:
-            if st.button("Clear Chat"):
-                # Reset chat history for current file
-                st.session_state.chat_history[current_file] = []
-                st.rerun()
 
 
 def render_main_content() -> None:
@@ -314,6 +303,18 @@ def render_main_content() -> None:
 
         # Chat tab - contains the chat interface
         with chat_tab:
+            # Add clear chat button above the chat container
+            current_file = st.session_state.get('current_file')
+            has_chat_history = (current_file and
+                               current_file in st.session_state.get('chat_history', {}) and
+                               len(st.session_state.chat_history[current_file]) > 0)
+            
+            if has_chat_history:
+                if st.button("🗑️ Clear Chat", key="clear_chat_main", help="Clear chat history for this document"):
+                    # Reset chat history for current file
+                    st.session_state.chat_history[current_file] = []
+                    st.rerun()
+            
             # Create a scrollable container for chat
             chat_container = st.container(height=height_column_container)
 
