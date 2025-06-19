@@ -12,6 +12,7 @@ from llama_index.core.query_engine import RetrieverQueryEngine
 from ..utils.logger import Logger
 from ..utils.image import process_source_for_images, get_document_images
 from ..config import CITATION_PROMPT
+from ..utils.prompts import PromptTemplates
 
 class ChatEngine:
     """Manages query processing and response generation."""
@@ -43,26 +44,13 @@ class ChatEngine:
             mode="OR",
         )
         
-        # Use citation prompt (now the default)
-        prompt_template_str = CITATION_PROMPT
+        # Use language-specific citation prompt
+        prompt_template_str = PromptTemplates.get_citation_prompt()
         
         # Convert string template to PromptTemplate
         
-        # Define custom refine prompt template
-        CUSTOM_REFINE_PROMPT_TMPL = (
-            "The original query is as follows: {query_str}\n"
-            "We have provided an existing answer: {existing_answer}\n"
-            "We have the opportunity to refine the existing answer "
-            "(only if needed) with some more context below.\n"
-            "------------\n"
-            "{context_msg}\n"
-            "------------\n"
-            "Given the new context, refine the original answer to better "
-            "answer the query. Ensure that you include citations from the new context where appropriate, "
-            "and retain any relevant citations from the original answer. Citations MUST be in the format [<number>]. "
-            "If the context isn't useful, return the original answer.\n"
-            "Refined Answer: "
-        )
+        # Define custom refine prompt template (language-specific)
+        CUSTOM_REFINE_PROMPT_TMPL = PromptTemplates.get_refine_prompt()
         CUSTOM_REFINE_PROMPT = PromptTemplate(
             CUSTOM_REFINE_PROMPT_TMPL
         )

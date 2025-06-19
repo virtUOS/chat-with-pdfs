@@ -5,6 +5,7 @@ PDF analysis utilities for detecting scanned documents and OCR limitations.
 import re
 from typing import Tuple
 from ..utils.logger import Logger
+from .i18n import I18n
 
 
 class PDFAnalyzer:
@@ -82,13 +83,13 @@ class PDFAnalyzer:
         
         if is_likely_scanned:
             if scanned_ratio >= 0.8:
-                analysis_details["reason"] = "Most pages contain very little extractable text"
+                analysis_details["reason"] = I18n.t("most_pages_minimal_text")
             elif avg_text_per_page < 30:
-                analysis_details["reason"] = "Very low average text content per page"
+                analysis_details["reason"] = I18n.t("low_average_text")
             else:
-                analysis_details["reason"] = "High ratio of pages with minimal text content"
+                analysis_details["reason"] = I18n.t("high_ratio_minimal_text")
         else:
-            analysis_details["reason"] = "Sufficient text content detected"
+            analysis_details["reason"] = I18n.t("sufficient_text_detected")
         
         Logger.info(f"PDF Analysis: {analysis_details}")
         
@@ -109,16 +110,14 @@ class PDFAnalyzer:
         minimal_pages = analysis_details.get("pages_with_minimal_text", 0)
         avg_text = analysis_details.get("average_text_per_page", 0)
         
-        warning = "⚠️ **Potential OCR Limitation Detected**\n\n"
-        warning += f"This PDF appears to be scanned or image-based ({minimal_pages}/{pages} pages with minimal text, "
-        warning += f"avg {avg_text} characters per page).\n\n"
-        warning += "**This application cannot read text from images.** If your PDF contains:\n"
-        warning += "• Scanned documents\n"
-        warning += "• Images with text\n"
-        warning += "• Screenshots\n"
-        warning += "• Handwritten content\n\n"
-        warning += "You may be missing important content in your queries. "
-        warning += "Consider using an OCR tool to convert your PDF to searchable text first."
+        warning = I18n.t('potential_ocr_limitation') + "\n\n"
+        warning += I18n.t('pdf_appears_scanned', minimal_pages=minimal_pages, total_pages=pages, avg_text=avg_text) + "\n\n"
+        warning += I18n.t('cannot_read_images') + "\n"
+        warning += I18n.t('scanned_documents') + "\n"
+        warning += I18n.t('images_with_text') + "\n"
+        warning += I18n.t('screenshots') + "\n"
+        warning += I18n.t('handwritten_content') + "\n\n"
+        warning += I18n.t('missing_content_warning')
         
         return warning
     
@@ -137,10 +136,10 @@ class PDFAnalyzer:
         avg_text = analysis_details.get("average_text_per_page", 0)
         avg_words = analysis_details.get("average_words_per_page", 0)
         
-        info = f"📄 **Document Processing Complete**\n\n"
-        info += f"• **Pages processed:** {pages}\n"
-        info += f"• **Average text per page:** {avg_text} characters\n"
-        info += f"• **Average words per page:** {avg_words} words\n\n"
-        info += "The document appears to have sufficient text content for effective querying."
+        info = I18n.t('document_processing_complete') + "\n\n"
+        info += I18n.t('pages_processed', pages=pages) + "\n"
+        info += I18n.t('average_text_per_page', avg_text=avg_text) + "\n"
+        info += I18n.t('average_words_per_page', avg_words=avg_words) + "\n\n"
+        info += I18n.t('sufficient_text_content')
         
         return info

@@ -6,6 +6,7 @@ Displays warnings when PDFs might contain scanned content.
 import streamlit as st
 from ..utils.pdf_analysis import PDFAnalyzer
 from ..utils.logger import Logger
+from ..utils.i18n import I18n
 
 
 def display_ocr_warning(pdf_filename: str) -> None:
@@ -99,24 +100,24 @@ def display_ocr_status_in_sidebar(pdf_filename: str) -> None:
     analysis = st.session_state.ocr_analysis[pdf_id]
     details = analysis['analysis_details']
     
-    with st.expander("📄 Document Analysis", expanded=False):
+    with st.expander(I18n.t('document_analysis'), expanded=False):
         col1, col2 = st.columns(2)
         
         with col1:
-            st.metric("Pages", details.get('total_pages', 0))
-            st.metric("Avg Text/Page", f"{details.get('average_text_per_page', 0)} chars")
+            st.metric(I18n.t('pages'), details.get('total_pages', 0))
+            st.metric(I18n.t('avg_text_per_page'), f"{details.get('average_text_per_page', 0)} {I18n.t('chars')}")
         
         with col2:
-            st.metric("Avg Words/Page", details.get('average_words_per_page', 0))
+            st.metric(I18n.t('avg_words_per_page'), details.get('average_words_per_page', 0))
             scanned_ratio = details.get('likely_scanned_ratio', 0)
-            st.metric("Scanned Ratio", f"{scanned_ratio:.1%}")
+            st.metric(I18n.t('scanned_ratio'), f"{scanned_ratio:.1%}")
         
         if analysis['is_likely_scanned']:
-            st.error("⚠️ **OCR Limitation**: This document appears to be scanned or image-based. Text extraction may be incomplete.")
+            st.error(I18n.t('ocr_limitation'))
         else:
-            st.success("✅ **Good Text Content**: Document has sufficient extractable text.")
+            st.success(I18n.t('good_text_content'))
         
-        st.caption(f"Analysis: {details.get('reason', 'No details available')}")
+        st.caption(I18n.t('analysis', details=details.get('reason', I18n.t('no_details_available'))))
 
 
 def check_and_display_ocr_warning_for_current_file() -> None:

@@ -11,6 +11,7 @@ from streamlit_dimensions import st_dimensions
 
 from ..utils.logger import Logger
 from ..utils.source import format_source_for_display
+from ..utils.i18n import I18n
 from ..core.document_manager import DocumentManager
 from .components import (
     display_document_info, display_document_images,
@@ -27,7 +28,7 @@ def render_sidebar() -> None:
         
         if not has_documents:
             # Only show file uploader when no documents are uploaded
-            st.header("Document Upload")
+            st.header(I18n.t('document_upload'))
             
             # Define callback for file uploader
             def on_file_upload():
@@ -67,7 +68,7 @@ def render_sidebar() -> None:
                     # Process each uploaded file
                     for i, uploaded_file in enumerate(uploaded_files):
     
-                        with st.spinner(f"Uploading and processing file {uploaded_file.name}..."):
+                        with st.spinner(I18n.t('uploading_processing_file', filename=uploaded_file.name)):
                             # Update processing status
                             st.session_state.file_processing_status[uploaded_file.name] = {
                                 'status': 'processing',
@@ -107,7 +108,7 @@ def render_sidebar() -> None:
             
             # Display the file uploader with the session-specific key
             st.file_uploader(
-                "Upload PDF documents",
+                I18n.t('upload_pdf_documents'),
                 type="pdf",
                 key=session_key,
                 accept_multiple_files=True,
@@ -121,7 +122,7 @@ def render_sidebar() -> None:
             sidebar_max_height = int(sidebar_screen_height * 0.4) if sidebar_screen_height else 400
 
             # Show document list and management section when documents are available
-            st.header("Your Documents")
+            st.header(I18n.t('your_documents'))
             
             # Display document count and add a "Delete All" button
             total_docs = len(st.session_state.pdf_data)
@@ -129,7 +130,7 @@ def render_sidebar() -> None:
             container_height = min(sidebar_max_height, 80 * total_docs)  # 80px per document, max dynamic height
             doc_list_container = st.container(height=container_height)
             
-            st.caption(f"{total_docs} document{'s' if total_docs > 1 else ''} available")
+            st.caption(I18n.t('documents_available', count=total_docs))
             
             # Put all documents in the scrollable container
             with doc_list_container:
@@ -148,12 +149,12 @@ def render_sidebar() -> None:
                         button_label = f"📌 {doc_name}"
                     
                     if col1.button(button_label, key=f"doc_btn_{doc_name}", use_container_width=True,
-                                  help=f"Switch to {doc_name}"):
+                                  help=I18n.t('switch_to_document', filename=doc_name)):
                         st.session_state.current_file = doc_name
                         st.rerun()
                     
                     # Delete button for each document
-                    if col3.button("🗑️", key=f"del_doc_{doc_name}", help=f"Remove {doc_name}"):
+                    if col3.button("🗑️", key=f"del_doc_{doc_name}", help=I18n.t('remove_document', filename=doc_name)):
                         del st.session_state.pdf_data[doc_name]
                         if doc_name in st.session_state.pdf_binary_data:
                             del st.session_state.pdf_binary_data[doc_name]
@@ -181,7 +182,7 @@ def render_sidebar() -> None:
                     st.divider()
 
             # Add "Delete All" button
-            if st.button("🗑️ Clear All Files", help="Delete all documents"):
+            if st.button(I18n.t('clear_all_files'), help=I18n.t('delete_all_documents')):
                 # Clear all document data
                 st.session_state.pdf_data = {}
                 st.session_state.pdf_binary_data = {}
@@ -197,9 +198,12 @@ def render_sidebar() -> None:
         if current_file:
             display_ocr_status_in_sidebar(current_file)
         
-        st.header("Settings")
+        st.header(I18n.t('settings'))
+        
+        # Language selection
+        I18n.render_language_selector()
+        
         # Model selection
-
         # Use model display map and display names from session state (initialized in StateManager)
         model_display_map = st.session_state['model_display_map']
         display_names = st.session_state['model_display_names']
@@ -215,7 +219,7 @@ def render_sidebar() -> None:
             current_display_name = display_names[0]
 
         st.selectbox(
-            "Select Model",
+            I18n.t('select_model'),
             display_names,
             index=display_names.index(current_display_name),
             key='selected_display_name',
@@ -236,16 +240,16 @@ def render_main_content() -> None:
     if not current_file:
         if not st.session_state.pdf_data:
             # No documents uploaded yet
-            st.info("👈 Please upload a PDF document to start chatting")
+            st.info(I18n.t('upload_pdf_to_start'))
         else:
             # Documents uploaded but none selected
-            st.info("👈 Select a PDF document to start chatting")
+            st.info(I18n.t('select_pdf_to_start'))
         return
     
     # Display document information with total number of documents
     total_docs = len(st.session_state.pdf_data)
     doc_position = list(st.session_state.pdf_data.keys()).index(current_file) + 1
-    st.subheader(f"You're now chatting with: {current_file} ({doc_position}/{total_docs})")
+    st.subheader(I18n.t('chatting_with', filename=current_file, position=doc_position, total=total_docs))
     
     # Split the display into two columns - one for PDF and one for content tabs
     pdf_column, content_column = st.columns([50, 50], gap="medium")
@@ -296,7 +300,7 @@ def render_main_content() -> None:
                 on_annotation_click=annotation_click_handler
             )
         else:
-            st.error("PDF data not available. Please try re-uploading the document.")
+            st.error(I18n.t('pdf_data_not_available'))
     
     # Create a scrollable container for the chat with dynamic height
     screen_height = streamlit_js_eval(js_expressions='screen.height', key='screen_height')
@@ -309,7 +313,7 @@ def render_main_content() -> None:
     # Tabbed content in the right column
     with content_column:
         # Create tabs
-        chat_tab, info_tab, images_tab = st.tabs(["Chat", "Document Info", "Images"])
+        chat_tab, info_tab, images_tab = st.tabs([I18n.t('chat'), I18n.t('document_info'), I18n.t('images')])
 
         # Calculate images container height (0.6 * screen_height)
         images_container_height = int(screen_height * 0.4) if main_container_dimensions else 500
@@ -323,7 +327,7 @@ def render_main_content() -> None:
                                len(st.session_state.chat_history[current_file]) > 0)
             
             if has_chat_history:
-                if st.button("🗑️ Clear Chat", key="clear_chat_main", help="Clear chat history for this document"):
+                if st.button(I18n.t('clear_chat'), key="clear_chat_main", help=I18n.t('clear_chat_help')):
                     # Reset chat history for current file
                     st.session_state.chat_history[current_file] = []
                     st.rerun()
@@ -345,7 +349,7 @@ def render_main_content() -> None:
                             if citation_numbers:
                                 # Display sources if this is an assistant message with sources
                                 if msg["role"] == "assistant" and msg.get("sources"):
-                                    with st.expander("📂 Show Sources"):
+                                    with st.expander(I18n.t('show_sources')):
                                         # Only display sources that are actually cited in the response
                                         displayed_sources = set()
                                         
@@ -385,14 +389,14 @@ def render_main_content() -> None:
                                                         source_text = format_source_for_display(source)
                                                         
                                                         # Display prominent citation label
-                                                        st.markdown(f"##### **Source [{citation_num}] (Page {page_num}):**")
+                                                        st.markdown(f"##### **{I18n.t('source_citation', citation=citation_num, page=page_num)}**")
                                                         # Display raw source content as plain text/code block
                                                         st.code(source_text)
                                                         displayed_sources.add(original_source_index)
                                                 else:
                                                     Logger.warning(f"Citation number {citation_num} not found in mapping")
                                         else:
-                                            st.warning("⚠️ Citation mapping not available. Source information may be incomplete.")
+                                            st.warning(I18n.t('citation_mapping_not_available'))
                                         # Add separator between sources
                                         if len(displayed_sources) < len(citation_numbers):
                                             st.divider()
@@ -400,7 +404,7 @@ def render_main_content() -> None:
                                 # Display images if present
                                 if msg["role"] == "assistant" and msg.get("images") and len(msg["images"]) > 0:
                                     Logger.info(f"Displaying {len(msg['images'])} images in message")
-                                    with st.expander("🖼️ View Images", expanded=False):
+                                    with st.expander(I18n.t('view_images'), expanded=False):
                                         # Create a grid layout for images (2 columns)
                                         cols = st.columns(2)
                                         for i, img_info in enumerate(msg["images"]):
@@ -414,9 +418,9 @@ def render_main_content() -> None:
                                                         page_num = img_info.get('page', 'unknown')
                                                         meta_caption = img_info.get('caption', '')
                                                         if meta_caption:
-                                                            caption = f"Image from page {page_num}: {meta_caption}"
+                                                            caption = I18n.t('image_from_page_with_caption', page=page_num, caption=meta_caption)
                                                         else:
-                                                            caption = f"Image from page {page_num}"
+                                                            caption = I18n.t('image_from_page', page=page_num)
                                                         st.image(img_bytes, caption=caption)
                                                     else:
                                                         Logger.warning(f"Image file not found: {img_info['file_path']}")
@@ -442,7 +446,7 @@ def render_main_content() -> None:
                         help_text = "Available suggestions:\n" + "\n".join([f"• {suggestion}" for suggestion in suggestions])
                         
                         selected_suggestion = st.pills(
-                            label="Query suggestions:",
+                            label=I18n.t('query_suggestions'),
                             options=suggestions,
                             selection_mode="single",
                             help=help_text
@@ -465,7 +469,7 @@ def render_main_content() -> None:
                         Logger.error(f"Error displaying suggestions: {e}")
                         
             # Chat input
-            user_query = st.chat_input("Type your question here...")
+            user_query = st.chat_input(I18n.t('type_question_here'))
             if user_query:
                 handle_query_submission(user_query, current_file, chat_container)
                 st.rerun()
