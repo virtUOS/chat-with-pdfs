@@ -429,9 +429,19 @@ def render_main_content() -> None:
                                                     Logger.error(f"Error displaying image {img_info['file_path']}: {e}")
                                                     st.warning(f"Error displaying image: {os.path.basename(img_info['file_path']) if 'file_path' in img_info else 'Unknown'}")
             
-            # Display query suggestions as pills if available
+            # Display query suggestions as pills if available (but not for scanned documents)
             current_doc_id = st.session_state.pdf_data[current_file].get('doc_id', '')
+            
+            # Check if document is likely scanned
+            is_likely_scanned = False
             if (
+                'ocr_analysis' in st.session_state and
+                current_doc_id in st.session_state.ocr_analysis
+            ):
+                is_likely_scanned = st.session_state.ocr_analysis[current_doc_id]['is_likely_scanned']
+            
+            if (
+                not is_likely_scanned and  # Only show suggestions for non-scanned documents
                 'document_query_suggestions' in st.session_state and
                 current_doc_id in st.session_state.get('document_query_suggestions', {}) and
                 st.session_state['document_query_suggestions'][current_doc_id]

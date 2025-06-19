@@ -52,8 +52,21 @@ def display_document_info(file_name: str) -> None:
     if metadata.get('keywords') and metadata['keywords'] not in ['None', 'null']:
         st.markdown(f"**{I18n.t('keywords')}:** {metadata['keywords']}")
     
-    # Display summary if available
-    if doc_id and doc_id in st.session_state.get('document_summaries', {}):
+    # Display summary if available (but not for scanned documents)
+    # Check if document is likely scanned
+    is_likely_scanned = False
+    if (
+        'ocr_analysis' in st.session_state and
+        doc_id in st.session_state.ocr_analysis
+    ):
+        is_likely_scanned = st.session_state.ocr_analysis[doc_id]['is_likely_scanned']
+    
+    if (
+        not is_likely_scanned and  # Only show summary for non-scanned documents
+        doc_id and
+        doc_id in st.session_state.get('document_summaries', {}) and
+        st.session_state['document_summaries'][doc_id].strip()  # Only show if summary is not empty
+    ):
         st.markdown(f"### {I18n.t('summary')}")
         summary = st.session_state['document_summaries'][doc_id]
         st.markdown(f"{summary}")

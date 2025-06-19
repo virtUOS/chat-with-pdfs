@@ -217,22 +217,37 @@ class DocumentManager:
         # Analyze PDF content for potential OCR issues
         add_ocr_analysis_to_session_state(pdf_id, docs)
         
+        # Check if document is likely scanned before proceeding with processing
+        is_likely_scanned = False
+        if hasattr(st.session_state, 'ocr_analysis') and pdf_id in st.session_state.ocr_analysis:
+            is_likely_scanned = st.session_state.ocr_analysis[pdf_id]['is_likely_scanned']
+            Logger.info(f"OCR analysis for {pdf_id}: is_likely_scanned={is_likely_scanned}")
+        
         # DEBUG: Log pymupdf4llm.to_markdown() output
         for idx, doc in enumerate(docs):
             meta = doc.get('metadata', {})
             Logger.info(f"Doc chunk {idx}: metadata keys: {list(meta.keys())}")
             Logger.info(f"Doc chunk {idx}: page metadata: {meta.get('page')}")
+        
         # Process document and images using the refactored methods
         llama_documents = DocumentManager._process_document_content(docs, pdf_id)
         
         # Create vector and keyword indexes
         vector_index, keyword_index = DocumentManager._create_vector_database(llama_documents, pdf_id)
         
-        # Generate document summary
-        DocumentManager._generate_document_summary(llama_documents, pdf_id)
-        
-        # Generate query suggestions
-        DocumentManager._generate_query_suggestions(llama_documents, pdf_id)
+        # Only generate summary and query suggestions if document is not likely scanned
+        if not is_likely_scanned:
+            Logger.info(f"Document {pdf_id} has sufficient text content, generating summary and query suggestions")
+            # Generate document summary
+            DocumentManager._generate_document_summary(llama_documents, pdf_id)
+            
+            # Generate query suggestions
+            DocumentManager._generate_query_suggestions(llama_documents, pdf_id)
+        else:
+            Logger.info(f"Document {pdf_id} appears to be scanned, skipping summary and query generation to avoid hallucinations")
+            # Store empty summary and suggestions for scanned documents
+            StateManager.store_document_summary(pdf_id, "")
+            StateManager.store_query_suggestions(pdf_id, [])
         
         return vector_index, keyword_index, pdf_id
     
