@@ -8,23 +8,24 @@ import ast
 import fitz  # PyMuPDF
 
 from ..utils.logger import Logger
+from ..utils.i18n import I18n
 
 def display_document_info(file_name: str) -> None:
     """Display metadata information for the current document."""
     if file_name not in st.session_state.pdf_data:
-        st.warning("Document information not available")
+        st.warning(I18n.t('document_info_not_available'))
         return
     
     # Get document ID
     doc_id = st.session_state.file_document_id.get(file_name)
     if not doc_id:
-        st.warning("Document ID not found")
+        st.warning(I18n.t('document_id_not_found'))
         return
     
     # Find metadata from the vector index
     vector_index = st.session_state.pdf_data[file_name].get('vector_index')
     if not vector_index or not vector_index.docstore:
-        st.warning("Document data not found")
+        st.warning(I18n.t('document_data_not_found'))
         return
     
     # Get a representative node to extract metadata
@@ -33,27 +34,40 @@ def display_document_info(file_name: str) -> None:
         if not metadata:
             raise ValueError("Could not extract metadata")
     except Exception as e:
-        st.warning(f"Could not retrieve document metadata: {str(e)}")
+        st.warning(I18n.t('could_not_retrieve_metadata', error=str(e)))
         return
     
     # Display formatted metadata
-    st.subheader("Document Information")
+    st.subheader(I18n.t('document_information'))
     
     # Title
     if metadata.get('title') and metadata['title'] not in ['None', 'null']:
-        st.markdown(f"**Title:** {metadata['title']}")
+        st.markdown(f"**{I18n.t('title')}:** {metadata['title']}")
     
     # Author
     if metadata.get('author') and metadata['author'] not in ['None', 'null']:
-        st.markdown(f"**Author:** {metadata['author']}")
+        st.markdown(f"**{I18n.t('author')}:** {metadata['author']}")
     
     # Keywords
     if metadata.get('keywords') and metadata['keywords'] not in ['None', 'null']:
-        st.markdown(f"**Keywords:** {metadata['keywords']}")
+        st.markdown(f"**{I18n.t('keywords')}:** {metadata['keywords']}")
     
-    # Display summary if available
-    if doc_id and doc_id in st.session_state.get('document_summaries', {}):
-        st.markdown("### Summary")
+    # Display summary if available (but not for scanned documents)
+    # Check if document is likely scanned
+    is_likely_scanned = False
+    if (
+        'ocr_analysis' in st.session_state and
+        doc_id in st.session_state.ocr_analysis
+    ):
+        is_likely_scanned = st.session_state.ocr_analysis[doc_id]['is_likely_scanned']
+    
+    if (
+        not is_likely_scanned and  # Only show summary for non-scanned documents
+        doc_id and
+        doc_id in st.session_state.get('document_summaries', {}) and
+        st.session_state['document_summaries'][doc_id].strip()  # Only show if summary is not empty
+    ):
+        st.markdown(f"### {I18n.t('summary')}")
         summary = st.session_state['document_summaries'][doc_id]
         st.markdown(f"{summary}")
         st.markdown("---")
@@ -63,14 +77,14 @@ def display_document_info(file_name: str) -> None:
     if pdf_path and os.path.exists(pdf_path):
         try:
             doc = fitz.open(pdf_path)
-            st.markdown(f"**Page count:** {len(doc)}")
+            st.markdown(f"**{I18n.t('page_count')}:** {len(doc)}")
             doc.close()
         except Exception as e:
             Logger.warning(f"Could not determine page count: {str(e)}")
     
     # Table of Contents
     if metadata.get('toc_items') and metadata['toc_items'] not in ['None', 'null', '[]']:
-        st.markdown("**Table of Contents:**")
+        st.markdown(f"**{I18n.t('table_of_contents')}:**")
         try:
             # Safely evaluate the toc_items string
             toc_items = ast.literal_eval(metadata['toc_items'])
@@ -83,7 +97,7 @@ def display_document_info(file_name: str) -> None:
             st.markdown(metadata['toc_items'])
 
 
-def display_document_images(file_name: str, container_height: int = None) -> None:
+def display_document_images(file_name: str, container_height: int | None = None) -> None:
     """Display all images extracted from the document with captions.
 
     Args:
@@ -91,13 +105,13 @@ def display_document_images(file_name: str, container_height: int = None) -> Non
         container_height (int, optional): Height for the scrollable container. If None, no scroll container is used.
     """
     if file_name not in st.session_state.pdf_data:
-        st.warning("Document images not available")
+        st.warning(I18n.t('document_images_not_available'))
         return
     
     # Get document ID
     doc_id = st.session_state.file_document_id.get(file_name)
     if not doc_id:
-        st.warning("Document ID not found")
+        st.warning(I18n.t('document_id_not_found'))
         return
     
     # Get unified images directly from session state
@@ -112,8 +126,8 @@ def display_document_images(file_name: str, container_height: int = None) -> Non
     
     if unified_images:
         # Display images with rich metadata
-        st.subheader(f"Images from {file_name}")
-        st.caption(f"Found {len(unified_images)} images")
+        st.subheader(I18n.t('images_from', filename=file_name))
+        st.caption(I18n.t('found_images', count=len(unified_images)))
 
         # Use the provided dynamic height for the images container
         with st.container(height=container_height):
@@ -146,22 +160,22 @@ def display_document_images(file_name: str, container_height: int = None) -> Non
                         # Display image with caption
                         with cols[displayed_count % 3]:
                             if caption:
-                                display_caption = f"Page {page_num}: {caption}"
+                                display_caption = I18n.t('image_from_page_with_caption', page=page_num, caption=caption)
                             else:
-                                display_caption = f"Page {page_num}"
+                                display_caption = I18n.t('page', page=page_num)
                             st.image(img_bytes, caption=display_caption)
-                            st.caption(f"Image {displayed_count+1} of {len(unified_images)}")
+                            st.caption(I18n.t('image_count', current=displayed_count+1, total=len(unified_images)))
 
                         displayed_count += 1
                     except Exception as e:
                         with cols[displayed_count % 3]:
                             Logger.error(f"Error displaying image {img_path}: {e}")
-                            st.warning(f"Error displaying image: {os.path.basename(img_path)}")
+                            st.warning(I18n.t('error_displaying_image', filename=os.path.basename(img_path)))
                         displayed_count += 1
                 else:
                     with cols[displayed_count % 3]:
                         Logger.warning(f"Image file not found: {img_path}")
-                        st.warning(f"Image file not found: {os.path.basename(img_path)}")
+                        st.warning(I18n.t('image_file_not_found', filename=os.path.basename(img_path)))
                     displayed_count += 1
 
             # If we displayed some images, return early
@@ -173,11 +187,11 @@ def display_document_images(file_name: str, container_height: int = None) -> Non
     image_paths = st.session_state.get('document_image_map', {}).get(doc_id, [])
     
     if not image_paths:
-        st.info("No images found in this document")
+        st.info(I18n.t('no_images_found'))
         return
     
-    st.subheader(f"Images from {file_name}")
-    st.caption(f"Found {len(image_paths)} images")
+    st.subheader(I18n.t('images_from', filename=file_name))
+    st.caption(I18n.t('found_images', count=len(image_paths)))
     
     # Create a grid layout for images (3 columns)
     cols = st.columns(3)
@@ -204,16 +218,16 @@ def display_document_images(file_name: str, container_height: int = None) -> Non
                 
                 # Display image in the appropriate column using binary data
                 with cols[i % 3]:
-                    st.image(img_bytes, caption=f"Page {page_num}")
-                    st.caption(f"Image {i+1} of {len(image_paths)}")
+                    st.image(img_bytes, caption=I18n.t('page', page=page_num))
+                    st.caption(I18n.t('image_count', current=i+1, total=len(image_paths)))
             except Exception as e:
                 with cols[i % 3]:
                     Logger.error(f"Error displaying image {img_path}: {e}")
-                    st.warning(f"Error displaying image: {os.path.basename(img_path)}")
+                    st.warning(I18n.t('error_displaying_image', filename=os.path.basename(img_path)))
         else:
             with cols[i % 3]:
                 Logger.warning(f"Image file not found: {img_path}")
-                st.warning(f"Image file not found: {os.path.basename(img_path)}")
+                st.warning(I18n.t('image_file_not_found', filename=os.path.basename(img_path)))
 
 
 def _extract_document_metadata(vector_index):

@@ -7,10 +7,20 @@ import os
 import uuid
 import time
 import streamlit as st
+import fitz  # PyMuPDF
 
 from llama_index.core import Document as LlamaDocument
 from llama_index.core import VectorStoreIndex, SimpleKeywordTableIndex
 from llama_index.core.storage.docstore import SimpleDocumentStore
+from ..config import IMAGES_PATH
+
+from ..utils.logger import Logger
+from ..utils.prompts import PromptTemplates
+from ..utils.i18n import I18n
+from ..ui.ocr_warning import add_ocr_analysis_to_session_state
+from ..config import IMAGES_PATH, SUMMARY_MODEL
+from .file_processor import FileProcessor
+from .state_manager import StateManager
 
 
 def serialize_rects(obj):
@@ -31,10 +41,6 @@ def serialize_rects(obj):
     else:
         return obj
 
-from ..utils.logger import Logger
-from ..config import IMAGES_PATH, SUMMARY_MODEL
-from .file_processor import FileProcessor
-from .state_manager import StateManager
 
 class DocumentManager:
     """Manages document processing, storage, and retrieval."""
@@ -212,27 +218,45 @@ class DocumentManager:
             extract_words=True
         )
 
+        # Analyze PDF content for potential OCR issues
+        add_ocr_analysis_to_session_state(pdf_id, docs)
+        
+        # Check if document is likely scanned before proceeding with processing
+        is_likely_scanned = False
+        if hasattr(st.session_state, 'ocr_analysis') and pdf_id in st.session_state.ocr_analysis:
+            is_likely_scanned = st.session_state.ocr_analysis[pdf_id]['is_likely_scanned']
+            Logger.info(f"OCR analysis for {pdf_id}: is_likely_scanned={is_likely_scanned}")
+        
         # DEBUG: Log pymupdf4llm.to_markdown() output
         for idx, doc in enumerate(docs):
             meta = doc.get('metadata', {})
             Logger.info(f"Doc chunk {idx}: metadata keys: {list(meta.keys())}")
             Logger.info(f"Doc chunk {idx}: page metadata: {meta.get('page')}")
+        
         # Process document and images using the refactored methods
-        llama_documents = DocumentManager._process_document_content(docs, pdf_id)
+        llama_documents = DocumentManager._process_document_content(docs, pdf_id, pdf_path)
         
         # Create vector and keyword indexes
         vector_index, keyword_index = DocumentManager._create_vector_database(llama_documents, pdf_id)
         
-        # Generate document summary
-        DocumentManager._generate_document_summary(llama_documents, pdf_id)
-        
-        # Generate query suggestions
-        DocumentManager._generate_query_suggestions(llama_documents, pdf_id)
+        # Only generate summary and query suggestions if document is not likely scanned
+        if not is_likely_scanned:
+            Logger.info(f"Document {pdf_id} has sufficient text content, generating summary and query suggestions")
+            # Generate document summary
+            DocumentManager._generate_document_summary(llama_documents, pdf_id)
+            
+            # Generate query suggestions
+            DocumentManager._generate_query_suggestions(llama_documents, pdf_id)
+        else:
+            Logger.info(f"Document {pdf_id} appears to be scanned, skipping summary and query generation to avoid hallucinations")
+            # Store empty summary and suggestions for scanned documents
+            StateManager.store_document_summary(pdf_id, "")
+            StateManager.store_query_suggestions(pdf_id, [])
         
         return vector_index, keyword_index, pdf_id
     
     @staticmethod
-    def _process_document_content(docs, pdf_id):
+    def _process_document_content(docs, pdf_id, pdf_path):
         """Process document content extracted from PDF.
         
         Args:
@@ -377,7 +401,27 @@ class DocumentManager:
                             img_entry['file_path'] = os.path.join(os.getcwd(), img_path)
                         else:
                             img_entry['file_path'] = img_path
-
+                    else:
+                        # Image detected in PDF metadata but no extracted file found
+                        # Try to extract the image using coordinates from the PDF
+                        try:
+                            extracted_path = DocumentManager._extract_image_from_coordinates(
+                                pdf_path,
+                                document["metadata"].get("page", 1),
+                                img,
+                                pdf_id,
+                                i
+                            )
+                            if extracted_path:
+                                img_entry['file_path'] = extracted_path
+                                Logger.info(f"Successfully extracted image from coordinates: {extracted_path}")
+                            else:
+                                Logger.warning(f"Failed to extract image {i} from coordinates - skipping")
+                                continue
+                        except Exception as e:
+                            Logger.error(f"Error extracting image {i} from coordinates: {e}")
+                            continue
+    
                     # Assign caption if markdown reference exists for this filename
                     filename = os.path.basename(img_entry.get('file_path', ''))
                     caption_info = markdown_captions.get(filename)
@@ -388,7 +432,7 @@ class DocumentManager:
                         # Otherwise, empty caption and offset
                         img_entry['caption'] = ""
                         img_entry['offset'] = -1
-
+    
                     unified_images.append(img_entry)
 
             # Store unified images for this page
@@ -444,6 +488,71 @@ class DocumentManager:
             Logger.info(f"Stored {len(all_unified_images)} unified images with captions for document {pdf_id}")
         
         return llama_documents
+    
+    @staticmethod
+    def _extract_image_from_coordinates(pdf_path, page_num, img_metadata, pdf_id, img_index):
+        """Extract an image from PDF using its coordinates and save it to disk.
+        
+        Args:
+            pdf_path (str): Path to the PDF file
+            page_num (int): Page number (1-based)
+            img_metadata (dict): Image metadata containing bbox, transform, etc.
+            pdf_id (str): Document ID for organizing extracted images
+            img_index (int): Index of the image on the page
+            
+        Returns:
+            str: Path to the extracted image file, or None if extraction failed
+        """
+        try:
+            # Open the PDF document
+            doc = fitz.open(pdf_path)
+            
+            # Get the page (convert to 0-based index)
+            page = doc[page_num - 1]
+            
+            # Get the image bounding box
+            bbox = img_metadata.get('bbox')
+            if not bbox:
+                Logger.warning(f"No bbox found in image metadata for image {img_index}")
+                doc.close()
+                return None
+            
+            # Convert bbox to fitz.Rect if it's not already
+            if not isinstance(bbox, fitz.Rect):
+                # Assume bbox is a tuple/list of (x0, y0, x1, y1)
+                if hasattr(bbox, '__iter__') and len(bbox) >= 4:
+                    bbox = fitz.Rect(bbox[0], bbox[1], bbox[2], bbox[3])
+                else:
+                    Logger.warning(f"Invalid bbox format for image {img_index}: {bbox}")
+                    doc.close()
+                    return None
+            
+            # Create the image directory if it doesn't exist
+            doc_image_path = FileProcessor.create_image_directory(IMAGES_PATH, pdf_id)
+            
+            # Generate filename for the extracted image
+            filename = f"{os.path.splitext(os.path.basename(pdf_path))[0]}-page-{page_num}-img-{img_index}.jpg"
+            img_path = os.path.join(doc_image_path, filename)
+            
+            # Extract the image region as a pixmap
+            mat = fitz.Matrix(2.0, 2.0)  # 2x zoom for better quality
+            pix = page.get_pixmap(matrix=mat, clip=bbox)
+            
+            # Save the image
+            pix.save(img_path)
+            pix = None  # Free memory
+            
+            # Close the document
+            doc.close()
+            
+            Logger.info(f"Successfully extracted image from coordinates: {img_path}")
+            return img_path
+            
+        except Exception as e:
+            Logger.error(f"Error extracting image from coordinates: {e}")
+            if 'doc' in locals():
+                doc.close()
+            return None
     
     @staticmethod
     def _create_vector_database(documents, pdf_id):
@@ -509,17 +618,9 @@ class DocumentManager:
             # Initialize the LLM with the summary model
             llm = OpenAI(model=SUMMARY_MODEL)
             
-            # Create a prompt for summarization
-            prompt = f"""
-            Please provide a concise summary of the following document.
-            Focus on the main topics, key findings, and overall purpose.
-            Format the summary as 3-5 sentences of clear, informative text.
-            
-            DOCUMENT:
-            {sample_text}
-            
-            SUMMARY:
-            """
+            # Create a prompt for summarization using language-specific template
+            prompt_template = PromptTemplates.get_summary_prompt()
+            prompt = prompt_template.format(content=sample_text)
             
             # Generate the summary
             response = llm.complete(prompt)
@@ -557,19 +658,9 @@ class DocumentManager:
             # Initialize the LLM with the specified model
             llm = OpenAI(model=SUMMARY_MODEL)
             
-            # Create a prompt for generating queries
-            prompt = f"""
-            Please generate 3 interesting and diverse questions that someone might want to ask about the following document.
-            Make the questions specific to the content and insightful.
-            Format your response as a simple Python list with exactly 3 questions, each enclosed in quotes.
-            Example format: ["Question 1?", "Question 2?", "Question 3?"]
-            Do not include any other text, just the Python list.
-            
-            DOCUMENT:
-            {sample_text}
-            
-            QUESTIONS:
-            """
+            # Create a prompt for generating queries using language-specific template
+            prompt_template = PromptTemplates.get_query_suggestion_prompt()
+            prompt = prompt_template.format(content=sample_text)
             
             # Generate the suggestions
             response = llm.complete(prompt)
@@ -626,3 +717,132 @@ class DocumentManager:
                 "Summarize this document briefly."
             ]
             StateManager.store_query_suggestions(pdf_id, fallback_suggestions)
+    
+    @staticmethod
+    def _detect_text_language(text: str) -> str:
+        """
+        Detect if text is in German or English based on common words.
+        
+        Args:
+            text: Text to analyze
+            
+        Returns:
+            Language code ('de' or 'en')
+        """
+        if not text:
+            return 'en'
+        
+        text_lower = text.lower()
+        
+        # Common German words/phrases
+        german_indicators = [
+            'und', 'der', 'die', 'das', 'ist', 'sind', 'haben', 'wird', 'werden',
+            'mit', 'von', 'zu', 'auf', 'für', 'über', 'durch', 'bei', 'nach',
+            'dokument', 'zusammenfassung', 'frage', 'fragen', 'können', 'sollte',
+            'bitte', 'erstellen', 'generieren', 'inhalt', 'text', 'seite'
+        ]
+        
+        # Common English words/phrases
+        english_indicators = [
+            'and', 'the', 'is', 'are', 'have', 'will', 'would', 'with', 'from',
+            'to', 'on', 'for', 'about', 'through', 'by', 'after', 'document',
+            'summary', 'question', 'questions', 'can', 'should', 'please',
+            'create', 'generate', 'content', 'text', 'page'
+        ]
+        
+        german_count = sum(1 for word in german_indicators if word in text_lower)
+        english_count = sum(1 for word in english_indicators if word in text_lower)
+        
+        return 'de' if german_count > english_count else 'en'
+    
+    @staticmethod
+    def _translate_text(text: str, from_lang: str, to_lang: str) -> str:
+        """
+        Translate text from one language to another.
+        
+        Args:
+            text: Text to translate
+            from_lang: Source language code
+            to_lang: Target language code
+            
+        Returns:
+            Translated text
+        """
+        if from_lang == to_lang or not text:
+            return text
+        
+        try:
+            # Get translation prompt
+            prompt_template = PromptTemplates.get_translation_prompt(from_lang, to_lang)
+            if not prompt_template:
+                Logger.warning(f"No translation prompt available for {from_lang} to {to_lang}")
+                return text
+            
+            prompt = prompt_template.format(text=text)
+            
+            # Initialize LLM (using summary model for translation)
+            from ..config import OLLAMA_MODELS, OLLAMA_ENDPOINT, OLLAMA_API_KEY
+            from llama_index.llms.openai import OpenAI
+            try:
+                from llama_index.llms.ollama import Ollama
+            except ImportError:
+                pass
+            
+            # Use summary model for translation
+            if SUMMARY_MODEL in OLLAMA_MODELS:
+                llm = Ollama(model=SUMMARY_MODEL, base_url=OLLAMA_ENDPOINT, api_key=OLLAMA_API_KEY)
+            else:
+                llm = OpenAI(model=SUMMARY_MODEL, temperature=0.3)
+            
+            # Generate translation
+            response = llm.complete(prompt)
+            translated_text = response.text.strip()
+            
+            Logger.info(f"Translated text from {from_lang} to {to_lang}")
+            return translated_text
+            
+        except Exception as e:
+            Logger.error(f"Error translating text from {from_lang} to {to_lang}: {e}")
+            return text
+    
+    @staticmethod
+    def translate_document_content_if_needed(pdf_id: str, target_language: str | None = None):
+        """
+        Translate document summary and query suggestions if they're in a different language.
+        
+        Args:
+            pdf_id: Document ID
+            target_language: Target language code. If None, uses current language.
+        """
+        if target_language is None:
+            target_language = I18n.get_current_language()
+        
+        try:
+            # Get current summary and query suggestions
+            summary = StateManager.get_document_summary(pdf_id)
+            query_suggestions = StateManager.get_query_suggestions(pdf_id)
+            
+            # Check if summary needs translation
+            if summary:
+                summary_lang = DocumentManager._detect_text_language(summary)
+                if summary_lang != target_language:
+                    Logger.info(f"Translating summary from {summary_lang} to {target_language}")
+                    translated_summary = DocumentManager._translate_text(summary, summary_lang, target_language)
+                    StateManager.store_document_summary(pdf_id, translated_summary)
+            
+            # Check if query suggestions need translation
+            if query_suggestions:
+                # Combine suggestions to detect language
+                combined_suggestions = " ".join(query_suggestions)
+                suggestions_lang = DocumentManager._detect_text_language(combined_suggestions)
+                
+                if suggestions_lang != target_language:
+                    Logger.info(f"Translating query suggestions from {suggestions_lang} to {target_language}")
+                    translated_suggestions = []
+                    for suggestion in query_suggestions:
+                        translated_suggestion = DocumentManager._translate_text(suggestion, suggestions_lang, target_language)
+                        translated_suggestions.append(translated_suggestion)
+                    StateManager.store_query_suggestions(pdf_id, translated_suggestions)
+                    
+        except Exception as e:
+            Logger.error(f"Error translating document content for {pdf_id}: {e}")

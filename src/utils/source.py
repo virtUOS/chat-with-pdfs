@@ -105,9 +105,6 @@ def create_annotations_from_sources(answer_text, sources, citation_mapping=None)
     Returns:
         A list of annotation dictionaries
     """
-    import streamlit as st
-    from ..utils.logger import Logger
-
     citations = extract_citation_indices(answer_text)
     annotations = []
 

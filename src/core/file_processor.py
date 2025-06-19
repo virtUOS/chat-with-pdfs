@@ -5,7 +5,6 @@ Handles PDF file operations, saving and loading files from disk.
 
 import os
 import time
-from pathlib import Path
 from typing import Optional
 
 from ..utils.logger import Logger

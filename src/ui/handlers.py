@@ -4,12 +4,10 @@ Event handlers for the Chat with Docs application UI.
 
 import streamlit as st
 import time
-from typing import Dict, Any, List, Optional, Union
 
 from ..utils.logger import Logger
 from ..core.document_manager import DocumentManager
 from ..core.chat_engine import ChatEngine
-from ..core.state_manager import StateManager
 
 
 def handle_file_upload(uploaded_files) -> None:
