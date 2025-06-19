@@ -7,6 +7,7 @@ import os
 import uuid
 import time
 import streamlit as st
+import fitz  # PyMuPDF
 
 from llama_index.core import Document as LlamaDocument
 from llama_index.core import VectorStoreIndex, SimpleKeywordTableIndex
@@ -230,7 +231,7 @@ class DocumentManager:
             Logger.info(f"Doc chunk {idx}: page metadata: {meta.get('page')}")
         
         # Process document and images using the refactored methods
-        llama_documents = DocumentManager._process_document_content(docs, pdf_id)
+        llama_documents = DocumentManager._process_document_content(docs, pdf_id, pdf_path)
         
         # Create vector and keyword indexes
         vector_index, keyword_index = DocumentManager._create_vector_database(llama_documents, pdf_id)
@@ -252,7 +253,7 @@ class DocumentManager:
         return vector_index, keyword_index, pdf_id
     
     @staticmethod
-    def _process_document_content(docs, pdf_id):
+    def _process_document_content(docs, pdf_id, pdf_path):
         """Process document content extracted from PDF.
         
         Args:
@@ -397,7 +398,27 @@ class DocumentManager:
                             img_entry['file_path'] = os.path.join(os.getcwd(), img_path)
                         else:
                             img_entry['file_path'] = img_path
-
+                    else:
+                        # Image detected in PDF metadata but no extracted file found
+                        # Try to extract the image using coordinates from the PDF
+                        try:
+                            extracted_path = DocumentManager._extract_image_from_coordinates(
+                                pdf_path,
+                                document["metadata"].get("page", 1),
+                                img,
+                                pdf_id,
+                                i
+                            )
+                            if extracted_path:
+                                img_entry['file_path'] = extracted_path
+                                Logger.info(f"Successfully extracted image from coordinates: {extracted_path}")
+                            else:
+                                Logger.warning(f"Failed to extract image {i} from coordinates - skipping")
+                                continue
+                        except Exception as e:
+                            Logger.error(f"Error extracting image {i} from coordinates: {e}")
+                            continue
+    
                     # Assign caption if markdown reference exists for this filename
                     filename = os.path.basename(img_entry.get('file_path', ''))
                     caption_info = markdown_captions.get(filename)
@@ -408,7 +429,7 @@ class DocumentManager:
                         # Otherwise, empty caption and offset
                         img_entry['caption'] = ""
                         img_entry['offset'] = -1
-
+    
                     unified_images.append(img_entry)
 
             # Store unified images for this page
@@ -464,6 +485,73 @@ class DocumentManager:
             Logger.info(f"Stored {len(all_unified_images)} unified images with captions for document {pdf_id}")
         
         return llama_documents
+    
+    @staticmethod
+    def _extract_image_from_coordinates(pdf_path, page_num, img_metadata, pdf_id, img_index):
+        """Extract an image from PDF using its coordinates and save it to disk.
+        
+        Args:
+            pdf_path (str): Path to the PDF file
+            page_num (int): Page number (1-based)
+            img_metadata (dict): Image metadata containing bbox, transform, etc.
+            pdf_id (str): Document ID for organizing extracted images
+            img_index (int): Index of the image on the page
+            
+        Returns:
+            str: Path to the extracted image file, or None if extraction failed
+        """
+        try:
+            from ..config import IMAGES_PATH
+            
+            # Open the PDF document
+            doc = fitz.open(pdf_path)
+            
+            # Get the page (convert to 0-based index)
+            page = doc[page_num - 1]
+            
+            # Get the image bounding box
+            bbox = img_metadata.get('bbox')
+            if not bbox:
+                Logger.warning(f"No bbox found in image metadata for image {img_index}")
+                doc.close()
+                return None
+            
+            # Convert bbox to fitz.Rect if it's not already
+            if not isinstance(bbox, fitz.Rect):
+                # Assume bbox is a tuple/list of (x0, y0, x1, y1)
+                if hasattr(bbox, '__iter__') and len(bbox) >= 4:
+                    bbox = fitz.Rect(bbox[0], bbox[1], bbox[2], bbox[3])
+                else:
+                    Logger.warning(f"Invalid bbox format for image {img_index}: {bbox}")
+                    doc.close()
+                    return None
+            
+            # Create the image directory if it doesn't exist
+            doc_image_path = FileProcessor.create_image_directory(IMAGES_PATH, pdf_id)
+            
+            # Generate filename for the extracted image
+            filename = f"{os.path.splitext(os.path.basename(pdf_path))[0]}-page-{page_num}-img-{img_index}.jpg"
+            img_path = os.path.join(doc_image_path, filename)
+            
+            # Extract the image region as a pixmap
+            mat = fitz.Matrix(2.0, 2.0)  # 2x zoom for better quality
+            pix = page.get_pixmap(matrix=mat, clip=bbox)
+            
+            # Save the image
+            pix.save(img_path)
+            pix = None  # Free memory
+            
+            # Close the document
+            doc.close()
+            
+            Logger.info(f"Successfully extracted image from coordinates: {img_path}")
+            return img_path
+            
+        except Exception as e:
+            Logger.error(f"Error extracting image from coordinates: {e}")
+            if 'doc' in locals():
+                doc.close()
+            return None
     
     @staticmethod
     def _create_vector_database(documents, pdf_id):
