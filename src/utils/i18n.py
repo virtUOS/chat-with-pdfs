@@ -225,7 +225,7 @@ class I18n:
     def get_current_language() -> str:
         """Get the current language from session state."""
         if 'language' not in st.session_state:
-            st.session_state.language = 'en'  # Default to English
+            st.session_state.language = 'de'  # Default to German
         return st.session_state.language
     
     @staticmethod
@@ -317,4 +317,30 @@ class I18n:
             selected_code = language_codes[display_names.index(selected_display)]
             if selected_code != current_lang:
                 I18n.set_language(selected_code)
+                # Translate existing document content if needed
+                I18n._translate_all_documents(selected_code)
                 st.rerun()
+    
+    @staticmethod
+    def _translate_all_documents(target_language: str) -> None:
+        """
+        Translate all loaded documents' summaries and query suggestions to the target language.
+        
+        Args:
+            target_language: Target language code
+        """
+        try:
+            # Import here to avoid circular imports
+            from ..core.document_manager import DocumentManager
+            from ..core.state_manager import StateManager
+            
+            # Get all loaded documents
+            if 'pdf_data' in st.session_state:
+                for filename, pdf_info in st.session_state.pdf_data.items():
+                    if isinstance(pdf_info, dict) and 'doc_id' in pdf_info:
+                        pdf_id = pdf_info['doc_id']
+                        Logger.info(f"Translating content for document {filename} (ID: {pdf_id})")
+                        DocumentManager.translate_document_content_if_needed(pdf_id, target_language)
+                        
+        except Exception as e:
+            Logger.error(f"Error translating documents to {target_language}: {e}")

@@ -120,6 +120,52 @@ class PromptTemplates:
     """
     }
     
+    SUMMARY_PROMPTS = {
+        'en': """Please provide a concise summary of the following document.
+Focus on the main topics, key points, and important information.
+Keep the summary informative but brief (2-3 paragraphs maximum).
+
+Document content:
+{content}
+
+Summary:""",
+        
+        'de': """Bitte erstellen Sie eine prägnante Zusammenfassung des folgenden Dokuments.
+Konzentrieren Sie sich auf die Hauptthemen, wichtige Punkte und wichtige Informationen.
+Halten Sie die Zusammenfassung informativ, aber kurz (maximal 2-3 Absätze).
+
+Dokumentinhalt:
+{content}
+
+Zusammenfassung:"""
+    }
+    
+    QUERY_SUGGESTION_PROMPTS = {
+        'en': """Please generate 3 interesting and diverse questions that someone might want to ask about the following document.
+The questions should:
+- Cover different aspects of the document
+- Be specific and actionable
+- Help users explore the content effectively
+- Be formatted as a simple list (one question per line)
+
+Document content:
+{content}
+
+Questions:""",
+        
+        'de': """Bitte generieren Sie 3 interessante und vielfältige Fragen, die jemand zu dem folgenden Dokument stellen könnte.
+Die Fragen sollten:
+- Verschiedene Aspekte des Dokuments abdecken
+- Spezifisch und umsetzbar sein
+- Benutzern helfen, den Inhalt effektiv zu erkunden
+- Als einfache Liste formatiert sein (eine Frage pro Zeile)
+
+Dokumentinhalt:
+{content}
+
+Fragen:"""
+    }
+    
     @staticmethod
     def get_citation_prompt(language: str | None = None) -> str:
         """
@@ -151,3 +197,66 @@ class PromptTemplates:
             language = I18n.get_current_language()
         
         return PromptTemplates.REFINE_PROMPTS.get(language, PromptTemplates.REFINE_PROMPTS['en'])
+    
+    @staticmethod
+    def get_summary_prompt(language: str | None = None) -> str:
+        """
+        Get the summary prompt for the specified language.
+        
+        Args:
+            language: Language code ('en' or 'de'). If None, uses current language.
+            
+        Returns:
+            Summary prompt template
+        """
+        if language is None:
+            language = I18n.get_current_language()
+        
+        return PromptTemplates.SUMMARY_PROMPTS.get(language, PromptTemplates.SUMMARY_PROMPTS['en'])
+    
+    @staticmethod
+    def get_query_suggestion_prompt(language: str | None = None) -> str:
+        """
+        Get the query suggestion prompt for the specified language.
+        
+        Args:
+            language: Language code ('en' or 'de'). If None, uses current language.
+            
+        Returns:
+            Query suggestion prompt template
+        """
+        if language is None:
+            language = I18n.get_current_language()
+        
+        return PromptTemplates.QUERY_SUGGESTION_PROMPTS.get(language, PromptTemplates.QUERY_SUGGESTION_PROMPTS['en'])
+    
+    TRANSLATION_PROMPTS = {
+        'de_to_en': """Please translate the following German text to English. Maintain the same structure, formatting, and meaning. If the text contains a list of questions, keep them as a list format.
+
+German text:
+{text}
+
+English translation:""",
+        
+        'en_to_de': """Please translate the following English text to German. Maintain the same structure, formatting, and meaning. If the text contains a list of questions, keep them as a list format.
+
+English text:
+{text}
+
+German translation:"""
+    }
+    
+    @staticmethod
+    def get_translation_prompt(from_lang: str, to_lang: str) -> str:
+        """
+        Get the translation prompt for translating between languages.
+        
+        Args:
+            from_lang: Source language code ('en' or 'de')
+            to_lang: Target language code ('en' or 'de')
+            
+        Returns:
+            Translation prompt template
+        """
+        key = f"{from_lang}_to_{to_lang}"
+        return PromptTemplates.TRANSLATION_PROMPTS.get(key, "")
