@@ -15,6 +15,7 @@ from ..core.document_manager import DocumentManager
 from .components import (
     display_document_info, display_document_images,
 )
+from .ocr_warning import display_ocr_warning, display_ocr_status_in_sidebar
 from ..config import MODELS, OLLAMA_MODELS, OLLAMA_SUFFIX, OPENAI_SUFFIX, CUSTOM_MODELS, CUSTOM_SUFFIX
 from .handlers import handle_query_submission, handle_settings_change
 
@@ -191,6 +192,11 @@ def render_sidebar() -> None:
                 st.session_state.current_file = None
                 st.rerun()
         
+        # Display OCR analysis for current document
+        current_file = st.session_state.get('current_file')
+        if current_file:
+            display_ocr_status_in_sidebar(current_file)
+        
         st.header("Settings")
         # Model selection
 
@@ -222,6 +228,10 @@ def render_main_content() -> None:
     """Render the main content area with chat interface and document viewer."""
     # Check if we have a current file
     current_file = st.session_state.get('current_file')
+    
+    # Display OCR warning if applicable
+    if current_file:
+        display_ocr_warning(current_file)
     
     if not current_file:
         if not st.session_state.pdf_data:

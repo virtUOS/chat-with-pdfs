@@ -32,6 +32,8 @@ def serialize_rects(obj):
         return obj
 
 from ..utils.logger import Logger
+from ..utils.pdf_analysis import PDFAnalyzer
+from ..ui.ocr_warning import add_ocr_analysis_to_session_state
 from ..config import IMAGES_PATH, SUMMARY_MODEL
 from .file_processor import FileProcessor
 from .state_manager import StateManager
@@ -212,6 +214,9 @@ class DocumentManager:
             extract_words=True
         )
 
+        # Analyze PDF content for potential OCR issues
+        add_ocr_analysis_to_session_state(pdf_id, docs)
+        
         # DEBUG: Log pymupdf4llm.to_markdown() output
         for idx, doc in enumerate(docs):
             meta = doc.get('metadata', {})
