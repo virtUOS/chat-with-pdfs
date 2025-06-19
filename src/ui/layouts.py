@@ -301,7 +301,10 @@ def render_main_content() -> None:
     # Create a scrollable container for the chat with dynamic height
     screen_height = streamlit_js_eval(js_expressions='screen.height', key='screen_height')
     main_container_dimensions = st_dimensions(key="main")
-    height_column_container = int(screen_height * 0.5) if main_container_dimensions else 400
+    
+    # Reserve space for chat input and suggestions - reduce chat container height significantly
+    # This ensures the chat input is always visible
+    height_column_container = int(screen_height * 0.35) if main_container_dimensions else 300
     
     # Tabbed content in the right column
     with content_column:
@@ -309,7 +312,7 @@ def render_main_content() -> None:
         chat_tab, info_tab, images_tab = st.tabs(["Chat", "Document Info", "Images"])
 
         # Calculate images container height (0.6 * screen_height)
-        images_container_height = int(screen_height * 0.6) if main_container_dimensions else 500
+        images_container_height = int(screen_height * 0.4) if main_container_dimensions else 500
 
         # Chat tab - contains the chat interface
         with chat_tab:
@@ -325,7 +328,7 @@ def render_main_content() -> None:
                     st.session_state.chat_history[current_file] = []
                     st.rerun()
             
-            # Create a scrollable container for chat
+            # Create a scrollable container for chat with reduced height to ensure input visibility
             chat_container = st.container(height=height_column_container)
 
             # Display chat history
