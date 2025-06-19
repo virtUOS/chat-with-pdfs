@@ -13,5 +13,7 @@ streamlit-js-eval
 streamlit-dimensions
 streamlit-pdf-viewer
 
-# Optional Ollama support
+# LLM providers
+llama_index.llms.openai_like
+llama-index-llms-openai
 llama-index-llms-ollama
