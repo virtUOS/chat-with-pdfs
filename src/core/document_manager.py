@@ -12,6 +12,13 @@ import fitz  # PyMuPDF
 from llama_index.core import Document as LlamaDocument
 from llama_index.core import VectorStoreIndex, SimpleKeywordTableIndex
 from llama_index.core.storage.docstore import SimpleDocumentStore
+from ..config import IMAGES_PATH
+
+from ..utils.logger import Logger
+from ..ui.ocr_warning import add_ocr_analysis_to_session_state
+from ..config import IMAGES_PATH, SUMMARY_MODEL
+from .file_processor import FileProcessor
+from .state_manager import StateManager
 
 
 def serialize_rects(obj):
@@ -32,12 +39,6 @@ def serialize_rects(obj):
     else:
         return obj
 
-from ..utils.logger import Logger
-from ..utils.pdf_analysis import PDFAnalyzer
-from ..ui.ocr_warning import add_ocr_analysis_to_session_state
-from ..config import IMAGES_PATH, SUMMARY_MODEL
-from .file_processor import FileProcessor
-from .state_manager import StateManager
 
 class DocumentManager:
     """Manages document processing, storage, and retrieval."""
@@ -501,8 +502,6 @@ class DocumentManager:
             str: Path to the extracted image file, or None if extraction failed
         """
         try:
-            from ..config import IMAGES_PATH
-            
             # Open the PDF document
             doc = fitz.open(pdf_path)
             

@@ -11,7 +11,6 @@ from llama_index.core.query_engine import RetrieverQueryEngine
 
 from ..utils.logger import Logger
 from ..utils.image import process_source_for_images, get_document_images
-from ..config import CITATION_PROMPT
 from ..utils.prompts import PromptTemplates
 
 class ChatEngine:

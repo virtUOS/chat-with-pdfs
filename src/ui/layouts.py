@@ -17,7 +17,7 @@ from .components import (
     display_document_info, display_document_images,
 )
 from .ocr_warning import display_ocr_warning, display_ocr_status_in_sidebar
-from ..config import MODELS, OLLAMA_MODELS, OLLAMA_SUFFIX, OPENAI_SUFFIX, CUSTOM_MODELS, CUSTOM_SUFFIX
+from ..config import MODELS
 from .handlers import handle_query_submission, handle_settings_change
 
 def render_sidebar() -> None:
