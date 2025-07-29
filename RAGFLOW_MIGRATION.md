@@ -150,8 +150,39 @@ If you need to rollback to LlamaIndex:
 2. Restore original requirements.txt
 3. Remove RAGFlow environment variables
 
+## Latest Enhancements (January 2025)
+
+### Document Info Tab Improvements
+- **Enhanced Layout**: Two-column design with icons and better visual organization
+- **PyMuPDF Integration**: Page counting directly from cached PDF data
+- **Smart Date Formatting**: Human-readable dates (e.g., "July 28, 2025 at 11:43")
+- **Citation Support**: Document summaries now show sources with expandable details
+- **Cleaner UI**: Removed redundant headers and status fields
+
+### Images Tab Complete Rewrite
+- **PyMuPDF-Based Extraction**: Real-time image extraction from cached PDFs
+- **Page-Based Organization**: Images grouped by page with clear headers
+- **Proper Sizing**: Consistent 300px width for optimal viewing
+- **All Format Support**: RGB, CMYK, and Grayscale image handling
+- **Performance Optimized**: Efficient memory management and caching
+
+### Code Quality Improvements
+- **Import Organization**: All imports moved to file tops (no inline imports)
+- **Type Safety**: Comprehensive type annotations for all new functions
+- **Error Handling**: Graceful fallbacks and comprehensive logging
+- **Deprecation Fixes**: Updated to current Streamlit API standards
+
+### New Functions Added
+- `display_ragflow_document_info()`: Enhanced document metadata display
+- `display_ragflow_document_images()`: PyMuPDF-based image extraction
+- `_get_page_count_from_cached_pdf()`: Page counting from PDF
+- `_extract_images_from_pdf()`: Image extraction with PyMuPDF
+- `_get_ragflow_document_details()`: API-based document details
+
 ## Performance Notes
 
 - First document upload may take longer as RAGFlow processes and indexes
 - Subsequent queries should be faster due to RAGFlow's optimized retrieval
 - Large documents benefit significantly from RAGFlow's advanced chunking
+- Image extraction is performed on-demand with smart caching
+- Page counting uses multiple fallback methods for reliability
