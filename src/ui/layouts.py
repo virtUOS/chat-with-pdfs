@@ -294,9 +294,14 @@ def render_main_content() -> None:
                                                         
                                                         # Extract page number for prominent label
                                                         try:
-                                                            if hasattr(source, 'node'):
+                                                            if isinstance(source, dict):
+                                                                # RAGFlow format: source is a dict with metadata dict
+                                                                page_num = source.get('metadata', {}).get('page', 'N/A')
+                                                            elif hasattr(source, 'node'):
+                                                                # LlamaIndex format
                                                                 page_num = source.node.metadata.get('page', 'N/A')
                                                             elif hasattr(source, 'metadata') and hasattr(source, 'text'):
+                                                                # Alternative LlamaIndex format
                                                                 page_num = source.metadata.get('page', 'N/A')
                                                             else:
                                                                 page_num = 'Unknown'

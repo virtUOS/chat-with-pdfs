@@ -107,10 +107,10 @@ class RAGFlowChatEngine:
                 reference, file_name
             )
             
-            # Create citation mapping for the UI
+            # Create citation mapping for the UI (RAGFlow uses 0-based indexing)
             citation_mapping = {}
             for i, source in enumerate(sources):
-                citation_mapping[str(i + 1)] = i  # Map citation number to source index
+                citation_mapping[str(i)] = i  # Map citation number to source index (0-based for RAGFlow)
             
             # Store response for future reference
             if 'document_responses' not in st.session_state:

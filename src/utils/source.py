@@ -177,18 +177,32 @@ def format_source_for_display(source):
     Format a source for display in the UI with improved styling.
     
     Args:
-        source: The source node        
+        source: The source node (RAGFlow format: dict with 'text' key)
     Returns:
         The source_text formatted for display
     """
     try:
-        # Extract metadata and text based on source type
-        if hasattr(source, 'node'):
+        # Handle RAGFlow source format (dictionary)
+        if isinstance(source, dict):
+            # RAGFlow sources have 'text' field
+            source_text = source.get('text', '')
+            if not source_text:
+                source_text = 'No text available'
+        # Handle LlamaIndex source format (object with attributes)
+        elif hasattr(source, 'node'):
             source_text = source.node.text.strip()
         elif hasattr(source, 'metadata') and hasattr(source, 'text'):
             source_text = source.text.strip()
         else:
             source_text = str(source) if source is not None else 'No text available'
+        
+        # Clean up the text for better display
+        if source_text:
+            source_text = source_text.strip()
+            # Limit length for better readability (show first 300 chars)
+            if len(source_text) > 300:
+                source_text = source_text[:300] + "..."
+        
     except Exception as e:
         source_text = f"Could not extract source text: {str(e)}"
     
