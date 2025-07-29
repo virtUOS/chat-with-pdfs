@@ -190,6 +190,129 @@ def set_selected_ragflow_assistant(assistant_id: str):
     st.session_state.ragflow_chat_id = assistant_id
 
 
+def get_assistant_documents():
+    """
+    Get documents from the selected assistant's datasets.
+    
+    Returns:
+        list: List of documents from all datasets associated with the selected assistant
+    """
+    try:
+        from ..ragflow_client import create_client
+        
+        # Get selected assistant
+        assistant_id = st.session_state.get('selected_ragflow_assistant')
+        if not assistant_id:
+            return []
+        
+        client = create_client()
+        
+        # Get assistant details to find associated datasets
+        assistants_response = client.get_chat_assistants()
+        if assistants_response.get('code') != 0:
+            Logger.error(f"Failed to get assistants: {assistants_response.get('message')}")
+            return []
+        
+        # Find the selected assistant
+        selected_assistant = None
+        for assistant in assistants_response.get('data', []):
+            if assistant.get('id') == assistant_id:
+                selected_assistant = assistant
+                break
+        
+        if not selected_assistant:
+            Logger.error(f"Selected assistant {assistant_id} not found")
+            return []
+        
+        # Get dataset IDs from the assistant
+        dataset_ids = selected_assistant.get('dataset_ids', [])
+        if not dataset_ids:
+            Logger.info("Selected assistant has no datasets associated")
+            return []
+        
+        # Get documents from all datasets
+        all_documents = []
+        for dataset_id in dataset_ids:
+            try:
+                docs_response = client.get_documents(dataset_id)
+                if docs_response.get('code') == 0:
+                    docs_data = docs_response.get('data', {})
+                    documents = docs_data.get('docs', []) if isinstance(docs_data, dict) else docs_data
+                    
+                    # Add dataset info to each document
+                    for doc in documents:
+                        doc['dataset_id'] = dataset_id
+                        doc['dataset_name'] = f"Dataset {dataset_id}"  # Could be enhanced to get actual dataset name
+                    
+                    all_documents.extend(documents)
+                else:
+                    Logger.error(f"Failed to get documents from dataset {dataset_id}: {docs_response.get('message')}")
+            except Exception as e:
+                Logger.error(f"Error getting documents from dataset {dataset_id}: {str(e)}")
+        
+        Logger.info(f"Found {len(all_documents)} documents in assistant's datasets")
+        return all_documents
+        
+    except Exception as e:
+        Logger.error(f"Error getting assistant documents: {str(e)}")
+        return []
+
+
+def get_assistant_dataset_names():
+    """
+    Get dataset names for the selected assistant.
+    
+    Returns:
+        dict: Mapping of dataset_id to dataset_name
+    """
+    try:
+        from ..ragflow_client import create_client
+        
+        # Get selected assistant
+        assistant_id = st.session_state.get('selected_ragflow_assistant')
+        if not assistant_id:
+            return {}
+        
+        client = create_client()
+        
+        # Get assistant details
+        assistants_response = client.get_chat_assistants()
+        if assistants_response.get('code') != 0:
+            return {}
+        
+        # Find the selected assistant
+        selected_assistant = None
+        for assistant in assistants_response.get('data', []):
+            if assistant.get('id') == assistant_id:
+                selected_assistant = assistant
+                break
+        
+        if not selected_assistant:
+            return {}
+        
+        # Get dataset IDs and fetch their names
+        dataset_ids = selected_assistant.get('dataset_ids', [])
+        dataset_names = {}
+        
+        for dataset_id in dataset_ids:
+            try:
+                datasets_response = client.get_datasets()
+                if datasets_response.get('code') == 0:
+                    for dataset in datasets_response.get('data', []):
+                        if dataset.get('id') == dataset_id:
+                            dataset_names[dataset_id] = dataset.get('name', f'Dataset {dataset_id}')
+                            break
+            except Exception as e:
+                Logger.error(f"Error getting dataset name for {dataset_id}: {str(e)}")
+                dataset_names[dataset_id] = f'Dataset {dataset_id}'
+        
+        return dataset_names
+        
+    except Exception as e:
+        Logger.error(f"Error getting dataset names: {str(e)}")
+        return {}
+
+
 def validate_ragflow_environment():
     """
     Validate that RAGFlow environment variables are properly set.

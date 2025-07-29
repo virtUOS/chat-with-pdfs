@@ -48,13 +48,26 @@ pip install -r requirements.txt
 5. **Session Management**: Built-in chat session handling
 6. **Dynamic Model Selection**: Automatically detects and uses models configured in your RAGFlow instance
 
-## Model Configuration
+## Chat Assistant Configuration
 
 Unlike the previous LlamaIndex version, this RAGFlow implementation:
-- **Automatically detects available models** from your RAGFlow server
-- **No need to configure models in .env** - models are managed in RAGFlow
-- **Dynamic model dropdown** shows only models actually available in your instance
-- **Seamless model switching** without application restart
+- **Uses existing chat assistants** from your RAGFlow instance
+- **No model configuration needed** - models are pre-configured in each chat assistant
+- **Assistant selection dropdown** shows available chat assistants from your RAGFlow instance
+- **Each assistant has its own model and dataset configuration** managed in RAGFlow UI
+
+### Setting Up Chat Assistants
+
+1. **Create Chat Assistants in RAGFlow UI**:
+   - Go to your RAGFlow web interface
+   - Create chat assistants with your preferred models
+   - Associate them with your datasets
+   - Configure prompts and parameters
+
+2. **Select Assistant in Application**:
+   - The application will show available chat assistants in the sidebar
+   - Select the assistant you want to use for document chat
+   - Each assistant comes with its pre-configured model and settings
 
 ## Usage
 

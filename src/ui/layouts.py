@@ -12,7 +12,7 @@ from streamlit_dimensions import st_dimensions
 from ..utils.logger import Logger
 from ..utils.source import format_source_for_display
 from ..utils.i18n import I18n
-from ..utils.ragflow_common import get_available_ragflow_assistants, set_selected_ragflow_assistant
+from ..utils.ragflow_common import get_available_ragflow_assistants, set_selected_ragflow_assistant, get_assistant_documents, get_assistant_dataset_names
 from ..core.ragflow_document_manager import RAGFlowDocumentManager
 from .components import (
     display_document_info, display_document_images,
@@ -21,189 +21,10 @@ from .ocr_warning import display_ocr_warning, display_ocr_status_in_sidebar
 from .handlers import handle_query_submission, handle_settings_change
 
 def render_sidebar() -> None:
-    """Render the sidebar with file upload and settings."""
+    """Render the sidebar with chat assistant selection and knowledge base documents."""
     with st.sidebar:
-        # Check if there are any documents uploaded
-        has_documents = bool(st.session_state.pdf_data)
-        
-        if not has_documents:
-            # Only show file uploader when no documents are uploaded
-            st.header(I18n.t('document_upload'))
-            
-            # Define callback for file uploader
-            def on_file_upload():
-                # Try all possible file uploader keys to find the files
-                uploaded_files = None
-                current_key = f"file_uploader_{st.session_state.interaction_id}"
-                
-                # Check current session key first
-                if current_key in st.session_state and st.session_state[current_key]:
-                    uploaded_files = st.session_state[current_key]
-                
-                # If we found uploaded files, process them
-                if uploaded_files:
-    
-                    # Reset error display dictionary
-                    st.session_state["display_errors"] = {}
-                    
-                    # Initialize or update file queue status
-                    if 'file_processing_status' not in st.session_state:
-                        st.session_state.file_processing_status = {}
-                    
-                    # Ensure we have a list of files even if only one file was uploaded
-                    if not isinstance(uploaded_files, list):
-                        uploaded_files = [uploaded_files]
-                    
-                    # Track if we had a current file before processing
-                    had_current_file = 'current_file' in st.session_state and st.session_state.current_file
-                    
-                    # Add a progress indicator for multiple file uploads
-                    if len(uploaded_files) > 1:
-                        st.session_state.multi_upload_progress = {
-                            'total': len(uploaded_files),
-                            'processed': 0,
-                            'started_at': time.time()
-                        }
-                    
-                    # Process each uploaded file
-                    for i, uploaded_file in enumerate(uploaded_files):
-    
-                        with st.spinner(I18n.t('uploading_processing_file', filename=uploaded_file.name)):
-                            # Update processing status
-                            st.session_state.file_processing_status[uploaded_file.name] = {
-                                'status': 'processing',
-                                'started_at': time.time(),
-                                'index': i,
-                                'total': len(uploaded_files)
-                            }
-                            
-                            # Set as current only if:
-                            # - It's the only file being uploaded and we didn't have a current file
-                            # - It's the last file in a multi-file upload and we didn't have a current file
-                            set_as_current = (not had_current_file and
-                                            (len(uploaded_files) == 1 or i == len(uploaded_files) - 1))
-                            
-                            # Process the file with multi-upload information
-                            RAGFlowDocumentManager.process_document(
-                                uploaded_file,
-                                set_as_current=set_as_current,
-                                multi_upload=(len(uploaded_files) > 1)
-                            )
-                            
-                            # Update status after processing
-                            if uploaded_file.name in st.session_state.file_processing_status:
-                                st.session_state.file_processing_status[uploaded_file.name]['status'] = 'completed'
-                                st.session_state.file_processing_status[uploaded_file.name]['finished_at'] = time.time()
-                            
-                            # Update multi-upload progress if applicable
-                            if len(uploaded_files) > 1 and 'multi_upload_progress' in st.session_state:
-                                st.session_state.multi_upload_progress['processed'] += 1
-                    
-                    # Store the files we just processed to a more persistent session state key
-                    st.session_state.last_processed_files_data = uploaded_files
-            
-            # Generate a unique key for the file uploader that changes with each session
-            # but keeps the uploaded files until they are processed
-            session_key = f"file_uploader_{st.session_state.interaction_id}"
-            
-            # Display the file uploader with the session-specific key
-            st.file_uploader(
-                I18n.t('upload_pdf_documents'),
-                type="pdf",
-                key=session_key,
-                accept_multiple_files=True,
-                on_change=on_file_upload
-            )
-        else:
-            # Create a scrollable container for the document list with dynamic height
-            # This code adds padding to between UI widgets so don't put it in between widgets to avoid 
-            # too much blank space that looks weird in the UI
-            sidebar_screen_height = streamlit_js_eval(js_expressions='screen.height', key='sidebar_height')
-            sidebar_max_height = int(sidebar_screen_height * 0.4) if sidebar_screen_height else 400
-
-            # Show document list and management section when documents are available
-            st.header(I18n.t('your_documents'))
-            
-            # Display document count and add a "Delete All" button
-            total_docs = len(st.session_state.pdf_data)
-
-            container_height = min(sidebar_max_height, 80 * total_docs)  # 80px per document, max dynamic height
-            doc_list_container = st.container(height=container_height)
-            
-            st.caption(I18n.t('documents_available', count=total_docs))
-            
-            # Put all documents in the scrollable container
-            with doc_list_container:
-                # Create a more visual document list with timestamps
-                for doc_name in st.session_state.pdf_data.keys():
-                    
-                    # Create columns for document name, timestamp, and delete button
-                    col1, col3 = st.columns([3, 1])
-                    
-                    # Highlight the current document
-                    is_current = doc_name == st.session_state.get('current_file', '')
-                    
-                    # Document selection button styled as a link
-                    button_label = f"📄 {doc_name}"
-                    if is_current:
-                        button_label = f"📌 {doc_name}"
-                    
-                    if col1.button(button_label, key=f"doc_btn_{doc_name}", use_container_width=True,
-                                  help=I18n.t('switch_to_document', filename=doc_name)):
-                        st.session_state.current_file = doc_name
-                        st.rerun()
-                    
-                    # Delete button for each document
-                    if col3.button("🗑️", key=f"del_doc_{doc_name}", help=I18n.t('remove_document', filename=doc_name)):
-                        del st.session_state.pdf_data[doc_name]
-                        if doc_name in st.session_state.pdf_binary_data:
-                            del st.session_state.pdf_binary_data[doc_name]
-                        if doc_name in st.session_state.query_engine:
-                            del st.session_state.query_engine[doc_name]
-                        if doc_name in st.session_state.chat_history:
-                            del st.session_state.chat_history[doc_name]
-                            
-                        # Clean up document-specific responses
-                        if doc_name in st.session_state.document_responses:
-                            del st.session_state.document_responses[doc_name]
-                            
-                        # Also remove from processed_files set
-                        if doc_name in st.session_state.processed_files:
-                            st.session_state.processed_files.remove(doc_name)
-                            
-                        # Set current file to another document if available
-                        if st.session_state.pdf_data:
-                            st.session_state.current_file = list(st.session_state.pdf_data.keys())[0]
-                        else:
-                            st.session_state.current_file = None
-                        st.rerun()
-                    
-                    # Add a divider between documents
-                    st.divider()
-
-            # Add "Delete All" button
-            if st.button(I18n.t('clear_all_files'), help=I18n.t('delete_all_documents')):
-                # Clear all document data
-                st.session_state.pdf_data = {}
-                st.session_state.pdf_binary_data = {}
-                st.session_state.query_engine = {}
-                st.session_state.chat_history = {}
-                st.session_state.document_responses = {}
-                st.session_state.processed_files = set()
-                st.session_state.current_file = None
-                st.rerun()
-        
-        # Display OCR analysis for current document
-        current_file = st.session_state.get('current_file')
-        if current_file:
-            display_ocr_status_in_sidebar(current_file)
-        
-        st.header(I18n.t('settings'))
-        
-        # Language selection
-        I18n.render_language_selector()
-        
         # Chat Assistant selection
+        st.header("Chat Assistant")
         try:
             available_assistants = get_available_ragflow_assistants()
             if available_assistants:
@@ -229,43 +50,135 @@ def render_sidebar() -> None:
                     selected_index = assistant_names.index(selected_name)
                     selected_assistant_id = assistant_ids[selected_index]
                     set_selected_ragflow_assistant(selected_assistant_id)
+                    
+                    # Show assistant's knowledge base documents
+                    st.subheader("Knowledge Base Documents")
+                    
+                    # Get documents from assistant's datasets
+                    assistant_documents = get_assistant_documents()
+                    dataset_names = get_assistant_dataset_names()
+                    
+                    if assistant_documents:
+                        # Create a scrollable container for the document list
+                        sidebar_screen_height = streamlit_js_eval(js_expressions='screen.height', key='sidebar_height')
+                        sidebar_max_height = int(sidebar_screen_height * 0.4) if sidebar_screen_height else 400
+                        container_height = min(sidebar_max_height, 60 * len(assistant_documents))
+                        
+                        doc_list_container = st.container(height=container_height)
+                        st.caption(f"{len(assistant_documents)} documents available")
+                        
+                        with doc_list_container:
+                            for doc in assistant_documents:
+                                doc_name = doc.get('name', 'Unnamed Document')
+                                dataset_id = doc.get('dataset_id', '')
+                                dataset_name = dataset_names.get(dataset_id, f'Dataset {dataset_id}')
+                                
+                                # Create columns for document info
+                                col1, col2 = st.columns([3, 1])
+                                
+                                # Check if this is the current document
+                                is_current = doc_name == st.session_state.get('current_file', '')
+                                
+                                # Document selection button
+                                button_label = f"📄 {doc_name}"
+                                if is_current:
+                                    button_label = f"📌 {doc_name}"
+                                
+                                if col1.button(button_label, key=f"ragflow_doc_{doc.get('id')}",
+                                             use_container_width=True,
+                                             help=f"From {dataset_name}"):
+                                    st.session_state.current_file = doc_name
+                                    st.session_state.current_ragflow_doc = doc
+                                    st.rerun()
+                                
+                                # Show dataset info
+                                col2.caption(f"📚 {dataset_name}")
+                                
+                                st.divider()
+                    else:
+                        st.info("No documents found in this assistant's knowledge base.")
             else:
                 st.warning("⚠️ No chat assistants available. Please create chat assistants in your RAGFlow instance.")
         except Exception as e:
-            st.error(f"❌ Error loading available chat assistants: {str(e)}")
+            st.error(f"❌ Error loading chat assistants: {str(e)}")
             st.info("Please check your RAGFlow connection and configuration.")
+        
+        # Settings section
+        st.header(I18n.t('settings'))
+        
+        # Language selection
+        I18n.render_language_selector()
                 
 
 
 def render_main_content() -> None:
     """Render the main content area with chat interface and document viewer."""
-    # Check if we have a current file
+    # Check if we have a selected assistant and current file
+    selected_assistant = st.session_state.get('selected_ragflow_assistant')
     current_file = st.session_state.get('current_file')
     
-    # Display OCR warning if applicable
-    if current_file:
-        display_ocr_warning(current_file)
-    
-    if not current_file:
-        if not st.session_state.pdf_data:
-            # No documents uploaded yet
-            st.info(I18n.t('upload_pdf_to_start'))
-        else:
-            # Documents uploaded but none selected
-            st.info(I18n.t('select_pdf_to_start'))
+    if not selected_assistant:
+        st.info("👋 Please select a chat assistant from the sidebar to start chatting with documents.")
         return
     
-    # Display document information with total number of documents
-    total_docs = len(st.session_state.pdf_data)
-    doc_position = list(st.session_state.pdf_data.keys()).index(current_file) + 1
-    st.subheader(I18n.t('chatting_with', filename=current_file, position=doc_position, total=total_docs))
+    if not current_file:
+        st.info("📄 Please select a document from the assistant's knowledge base to start chatting.")
+        return
+    
+    # Get current RAGFlow document info
+    current_ragflow_doc = st.session_state.get('current_ragflow_doc', {})
+    
+    # Display document information
+    st.subheader(f"💬 Chatting with: {current_file}")
+    
+    # Show document metadata
+    if current_ragflow_doc:
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.caption(f"📄 **Document:** {current_ragflow_doc.get('name', 'Unknown')}")
+        with col2:
+            st.caption(f"📚 **Dataset:** {current_ragflow_doc.get('dataset_id', 'Unknown')}")
+        with col3:
+            chunk_count = current_ragflow_doc.get('chunk_count', 0)
+            st.caption(f"🧩 **Chunks:** {chunk_count}")
     
     # Split the display into two columns - one for PDF and one for content tabs
     pdf_column, content_column = st.columns([50, 50], gap="medium")
     
     # Display PDF in the left column
     with pdf_column:
-        if current_file and current_file in st.session_state.pdf_binary_data:
+        # Try to get PDF data from RAGFlow
+        pdf_data = None
+        
+        # Check if we have cached PDF data
+        pdf_cache_key = f"ragflow_pdf_{current_file}"
+        if pdf_cache_key in st.session_state:
+            pdf_data = st.session_state[pdf_cache_key]
+        elif current_ragflow_doc:
+            # Download PDF from RAGFlow
+            try:
+                with st.spinner("Loading PDF from RAGFlow..."):
+                    from ..ragflow_client import create_client
+                    client = create_client()
+                    
+                    dataset_id = current_ragflow_doc.get('dataset_id')
+                    doc_id = current_ragflow_doc.get('id')
+                    
+                    if dataset_id and doc_id:
+                        response = client._make_request('GET', f'/api/v1/datasets/{dataset_id}/documents/{doc_id}')
+                        if response.status_code == 200:
+                            pdf_data = response.content
+                            # Cache the PDF data
+                            st.session_state[pdf_cache_key] = pdf_data
+                            Logger.info(f"Successfully downloaded PDF for {current_file}")
+                        else:
+                            st.error(f"Failed to download PDF: {response.status_code}")
+                    else:
+                        st.error("Document ID or Dataset ID not available")
+            except Exception as e:
+                st.error(f"Error downloading PDF: {str(e)}")
+        
+        if pdf_data:
             # Get annotations for this document's chat history
             annotations = []
             
@@ -300,7 +213,6 @@ def render_main_content() -> None:
                 Logger.info(f"Annotation clicked on page {page}")
                 # No further action required
             
-            pdf_data = st.session_state.pdf_binary_data[current_file]
             pdf_viewer(
                 pdf_data,
                 height=pdf_height,
@@ -309,7 +221,7 @@ def render_main_content() -> None:
                 on_annotation_click=annotation_click_handler
             )
         else:
-            st.error(I18n.t('pdf_data_not_available'))
+            st.info("📄 PDF will be loaded when available from RAGFlow")
     
     # Create a scrollable container for the chat with dynamic height
     screen_height = streamlit_js_eval(js_expressions='screen.height', key='screen_height')
