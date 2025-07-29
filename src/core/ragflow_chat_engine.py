@@ -3,7 +3,7 @@ RAGFlow-based query engine and response synthesis for the Chat with Docs applica
 """
 
 import streamlit as st
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
 
 from ..utils.logger import Logger
 from ..utils.image import get_document_images
@@ -57,6 +57,26 @@ class RAGFlowChatEngine:
             session_key = f'ragflow_session_{file_name}'
             session_id = st.session_state.get(session_key)
             
+            # If no session exists, create one first (like in the test script)
+            if not session_id:
+                Logger.info("No session found, creating new RAGFlow session...")
+                init_response = chat_engine.client.chat_completion(
+                    chat_id=chat_id,
+                    question="",  # Empty question to initialize session
+                    stream=False
+                )
+                
+                if init_response.get('code') == 0:
+                    init_data = init_response.get('data', {})
+                    session_id = init_data.get('session_id')
+                    if session_id:
+                        st.session_state[session_key] = session_id
+                        Logger.info(f"Created new RAGFlow session: {session_id}")
+                    else:
+                        Logger.warning("Session initialization didn't return session_id")
+                else:
+                    Logger.error(f"Failed to initialize RAGFlow session: {init_response.get('message')}")
+            
             # Execute query with RAGFlow
             response = chat_engine.client.chat_completion(
                 chat_id=chat_id,
@@ -75,6 +95,8 @@ class RAGFlowChatEngine:
             # Debug: Log the actual response structure to understand what RAGFlow is returning
             Logger.info(f"RAGFlow response - Answer length: {len(answer)}")
             Logger.info(f"RAGFlow response - Reference type: {type(reference)}")
+            Logger.info(f"RAGFlow response - Reference content: {reference}")
+            Logger.info(f"RAGFlow response - Full data keys: {list(data.keys())}")
             if reference:
                 Logger.info(f"RAGFlow response - Reference keys: {list(reference.keys())}")
                 if 'chunks' in reference:
