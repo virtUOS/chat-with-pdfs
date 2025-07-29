@@ -224,15 +224,18 @@ def get_assistant_documents():
             Logger.error(f"Selected assistant {assistant_id} not found")
             return []
         
-        # Get dataset IDs from the assistant
-        dataset_ids = selected_assistant.get('dataset_ids', [])
-        if not dataset_ids:
+        # Get datasets from the assistant (according to RAGFlow API docs)
+        datasets = selected_assistant.get('datasets', [])
+        if not datasets:
             Logger.info("Selected assistant has no datasets associated")
             return []
         
         # Get documents from all datasets
         all_documents = []
-        for dataset_id in dataset_ids:
+        for dataset in datasets:
+            dataset_id = dataset.get('id')
+            if not dataset_id:
+                continue
             try:
                 docs_response = client.get_documents(dataset_id)
                 if docs_response.get('code') == 0:
@@ -290,21 +293,16 @@ def get_assistant_dataset_names():
         if not selected_assistant:
             return {}
         
-        # Get dataset IDs and fetch their names
-        dataset_ids = selected_assistant.get('dataset_ids', [])
+        # Get datasets from the assistant (according to RAGFlow API docs)
+        datasets = selected_assistant.get('datasets', [])
         dataset_names = {}
         
-        for dataset_id in dataset_ids:
-            try:
-                datasets_response = client.get_datasets()
-                if datasets_response.get('code') == 0:
-                    for dataset in datasets_response.get('data', []):
-                        if dataset.get('id') == dataset_id:
-                            dataset_names[dataset_id] = dataset.get('name', f'Dataset {dataset_id}')
-                            break
-            except Exception as e:
-                Logger.error(f"Error getting dataset name for {dataset_id}: {str(e)}")
-                dataset_names[dataset_id] = f'Dataset {dataset_id}'
+        # The datasets array already contains the dataset info including names
+        for dataset in datasets:
+            dataset_id = dataset.get('id')
+            dataset_name = dataset.get('name', f'Dataset {dataset_id}')
+            if dataset_id:
+                dataset_names[dataset_id] = dataset_name
         
         return dataset_names
         
