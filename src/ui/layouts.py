@@ -311,10 +311,22 @@ def render_main_content() -> None:
                                                         # Get raw source text
                                                         source_text = format_source_for_display(source)
                                                         
-                                                        # Display prominent citation label
-                                                        st.markdown(f"##### **{I18n.t('source_citation', citation=citation_num, page=page_num)}**")
-                                                        # Display raw source content as plain text/code block
-                                                        st.code(source_text)
+                                                        # Get document name and similarity for nice display
+                                                        if isinstance(source, dict):
+                                                            doc_name = source.get('metadata', {}).get('document_name', 'Unknown Document')
+                                                            similarity = source.get('metadata', {}).get('similarity', 0.0)
+                                                        else:
+                                                            doc_name = 'Unknown Document'
+                                                            similarity = 0.0
+                                                        
+                                                        # Display in a nice format like the test script
+                                                        st.markdown(f"**{citation_num}. {doc_name}** (similarity: {similarity:.3f})")
+                                                        if page_num != 'N/A':
+                                                            st.caption(f"📄 Page {page_num}")
+                                                        
+                                                        # Display source text as clean markdown (not code block)
+                                                        st.markdown(f"   {source_text}")
+                                                        st.markdown("---")  # Add separator between sources
                                                         displayed_sources.add(original_source_index)
                                                 else:
                                                     Logger.warning(f"Citation number {citation_num} not found in mapping")
