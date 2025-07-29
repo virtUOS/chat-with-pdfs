@@ -72,6 +72,21 @@ class RAGFlowChatEngine:
             answer = data.get('answer', '')
             reference = data.get('reference', {})
             
+            # Debug: Log the actual response structure to understand what RAGFlow is returning
+            Logger.info(f"RAGFlow response - Answer length: {len(answer)}")
+            Logger.info(f"RAGFlow response - Reference type: {type(reference)}")
+            if reference:
+                Logger.info(f"RAGFlow response - Reference keys: {list(reference.keys())}")
+                if 'chunks' in reference:
+                    chunks = reference.get('chunks', [])
+                    Logger.info(f"RAGFlow response - Found {len(chunks)} chunks")
+                    if chunks:
+                        Logger.info(f"RAGFlow response - First chunk keys: {list(chunks[0].keys())}")
+                else:
+                    Logger.info("RAGFlow response - No 'chunks' key in reference")
+            else:
+                Logger.info("RAGFlow response - Reference is empty or None")
+            
             # Update session ID if provided
             if data.get('session_id'):
                 st.session_state[session_key] = data.get('session_id')
