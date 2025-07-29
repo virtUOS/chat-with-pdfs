@@ -46,7 +46,24 @@ pip install -r requirements.txt
 3. **Multimodal Support**: Better handling of images and complex document layouts
 4. **Scalability**: Server-based architecture for better performance
 5. **Session Management**: Built-in chat session handling
-6. **Dynamic Model Selection**: Automatically detects and uses models configured in your RAGFlow instance
+6. **Knowledge Base Integration**: Uses existing RAGFlow datasets and documents
+7. **No Duplicate Management**: Documents are managed once in RAGFlow
+8. **Pre-configured Assistants**: Each assistant comes with optimized settings
+
+## Knowledge Base Approach
+
+### Major Differences from LlamaIndex Version:
+- **No Document Upload**: Documents are managed in RAGFlow, not uploaded through the app
+- **Assistant-Centric**: Select from existing chat assistants instead of configuring models
+- **Dataset Organization**: Documents are organized by RAGFlow datasets
+- **API-Based PDF Access**: PDFs are downloaded from RAGFlow when needed
+- **Centralized Management**: All document processing happens in RAGFlow
+
+### Benefits:
+- **Consistency**: Same documents and processing across all RAGFlow applications
+- **Optimization**: Leverage RAGFlow's advanced document processing
+- **Collaboration**: Multiple users can access the same knowledge bases
+- **Maintenance**: Update documents once in RAGFlow, available everywhere
 
 ## Chat Assistant Configuration
 
@@ -71,18 +88,41 @@ Unlike the previous LlamaIndex version, this RAGFlow implementation:
 
 ## Usage
 
-The application interface remains the same. Users can:
-1. Upload PDF documents (processed via RAGFlow)
-2. Chat with documents (powered by RAGFlow chat assistants)
-3. View sources and images (retrieved from RAGFlow datasets)
+The application interface has been updated to work with RAGFlow's knowledge base approach:
+
+1. **Select Chat Assistant**: Choose from your configured RAGFlow chat assistants
+2. **Browse Knowledge Base**: View documents from the assistant's datasets
+3. **Select Document**: Pick a document to chat with from the knowledge base
+4. **Chat with Context**: Use the assistant's pre-configured model and prompts
+5. **View PDF**: The actual PDF is downloaded from RAGFlow and displayed
+
+### No Upload Required
+Unlike the previous version, you don't upload documents through the application. Instead:
+- Documents are managed in RAGFlow's web interface
+- The application shows documents from your assistant's knowledge bases
+- PDFs are downloaded on-demand from RAGFlow's API
 
 ## Architecture
 
 ```
-User Upload → RAGFlow Dataset → RAGFlow Chat Assistant → Response
-     ↓              ↓                    ↓               ↓
-  File Save    Document Index      Query Processing   Answer + Sources
+RAGFlow Setup → Assistant Selection → Document Selection → Chat → PDF Viewing
+      ↓               ↓                    ↓              ↓         ↓
+   Datasets +    Available Assistants  Knowledge Base   RAGFlow   Download
+   Documents                           Documents        API       from API
 ```
+
+### Data Flow
+1. **RAGFlow Configuration** (done in RAGFlow UI):
+   - Create datasets and upload documents
+   - Create chat assistants with models
+   - Associate assistants with datasets
+
+2. **Application Workflow**:
+   - Fetch available chat assistants via API
+   - Get documents from selected assistant's datasets
+   - Download selected PDF from RAGFlow
+   - Chat using RAGFlow's completion API
+   - Display responses with sources and citations
 
 ## Troubleshooting
 
