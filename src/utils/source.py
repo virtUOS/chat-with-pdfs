@@ -9,6 +9,7 @@ import streamlit as st
 def extract_citation_indices(answer_text: str):
     """
     Extract citation indices from the answer text.
+    Supports both LlamaIndex format [1] and RAGFlow format [ID:0].
     
     Args:
         answer_text: The text to extract citation indices from
@@ -16,8 +17,10 @@ def extract_citation_indices(answer_text: str):
     Returns:
         A list of integers representing the citation indices
     """
-    # This regex returns a list of citation numbers found in the answer (as strings)
-    return [int(x) for x in re.findall(r'\[(\d+)\]', answer_text)]
+    # Check for RAGFlow format [ID:X] first
+    ragflow_citations = re.findall(r'\[ID:(\d+)\]', answer_text)
+    if ragflow_citations:
+        return [int(x) for x in ragflow_citations]
 
 
 def prepare_source_highlight(source):
@@ -134,6 +137,9 @@ def create_annotations_from_sources(answer_text, sources, citation_mapping=None)
                 except (ValueError, TypeError):
                     # Use 0 as fallback if conversion fails
                     page_num = 0
+                # Determine citation format based on answer text
+                citation_format = f"[ID:{idx}]" if "[ID:" in answer_text else f"[{idx}]"
+                
                 # Create a border annotation for the page based on the citation
                 # Position it at the top of the page with a thin border
                 annotation = {
@@ -143,8 +149,8 @@ def create_annotations_from_sources(answer_text, sources, citation_mapping=None)
                     "width": 580,        # Wide enough to be clearly visible
                     "height": 800,       # Tall enough to frame content
                     "color": "red",      # Red border
-                    "title": f"Source [{idx}]",  # Add citation number as title
-                    "label": f"[{idx}]"  # Add label for identification
+                    "title": f"Source {citation_format}",  # Add citation number as title
+                    "label": citation_format  # Add label for identification
                 }
                 
                 # Create a small annotation in top-right corner with the citation number
@@ -155,8 +161,8 @@ def create_annotations_from_sources(answer_text, sources, citation_mapping=None)
                     "width": 30,         # Small box for label
                     "height": 20,
                     "color": "red",
-                    "title": f"Source [{idx}]",  # Add citation number as title
-                    "label": f"[{idx}]"  # Add label for identification
+                    "title": f"Source {citation_format}",  # Add citation number as title
+                    "label": citation_format  # Add label for identification
                 }
                 
                 # Add the annotations
