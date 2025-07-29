@@ -146,38 +146,50 @@ def format_chat_history(history):
     return html
 
 
-def get_ragflow_model_for_assistant():
+def get_available_ragflow_models():
     """
-    Get the appropriate model name for RAGFlow chat assistant creation.
+    Get available models from RAGFlow server.
     
     Returns:
-        str: Model name compatible with RAGFlow
+        list: List of available model dictionaries from RAGFlow
     """
-    model_config = st.session_state.get('ragflow_model_config', {})
-    model_name = model_config.get('model_name', DEFAULT_MODEL)
-    model_type = model_config.get('model_type', 'openai')
+    try:
+        from ..ragflow_client import create_client
+        client = create_client()
+        response = client.get_available_models()
+        
+        if response.get('code') == 0:
+            return response.get('data', [])
+        else:
+            Logger.error(f"Failed to get RAGFlow models: {response.get('message')}")
+            return []
+    except Exception as e:
+        Logger.error(f"Error fetching RAGFlow models: {str(e)}")
+        return []
+
+
+def get_ragflow_model_for_assistant():
+    """
+    Get the selected model name for RAGFlow chat assistant creation.
     
-    # Map model names to RAGFlow-compatible names
-    ragflow_model_mapping = {
-        'gpt-4': 'gpt-4',
-        'gpt-4-turbo': 'gpt-4-turbo',
-        'gpt-3.5-turbo': 'gpt-3.5-turbo',
-        'deepseek-chat': 'deepseek-chat',
-        'qwen-plus': 'qwen-plus',
-        'claude-3-sonnet': 'claude-3-sonnet',
-        'claude-3-haiku': 'claude-3-haiku'
-    }
+    Returns:
+        str: Selected model name from RAGFlow available models
+    """
+    # Get the selected model from session state
+    selected_model = st.session_state.get('selected_ragflow_model')
     
-    # For Ollama models, use the model name as-is
-    if model_type == 'ollama':
-        return model_name
+    if selected_model:
+        return selected_model
     
-    # For custom models, try to map or use as-is
-    if model_type == 'custom':
-        return model_name
+    # If no model selected, get the first available model
+    available_models = get_available_ragflow_models()
+    if available_models:
+        first_model = available_models[0].get('name', available_models[0].get('id'))
+        Logger.info(f"No model selected, using first available: {first_model}")
+        return first_model
     
-    # For OpenAI models, use mapping or default
-    return ragflow_model_mapping.get(model_name, 'deepseek-chat')  # Default to deepseek-chat
+    # If no models available, raise an error
+    raise ValueError("No models available in RAGFlow. Please configure models in your RAGFlow instance.")
 
 
 def validate_ragflow_environment():

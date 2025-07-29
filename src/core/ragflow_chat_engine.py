@@ -44,11 +44,15 @@ class RAGFlowChatEngine:
                         st.session_state.ragflow_chat_id = existing_assistant.get('id')
                         Logger.info(f"Using existing RAGFlow chat assistant: {existing_assistant.get('id')}")
                     else:
+                        # Get the selected model for RAGFlow
+                        from ..utils.ragflow_common import get_ragflow_model_for_assistant
+                        selected_model = get_ragflow_model_for_assistant()
+                        
                         # Create new chat assistant
                         create_response = self.client.create_chat_assistant(
                             name='chat-with-docs',
                             dataset_ids=[dataset_id],
-                            llm='deepseek-chat',  # Default LLM
+                            llm=selected_model,
                             prompt='You are a helpful assistant that answers questions based on the provided documents. Always cite your sources and be precise in your responses.'
                         )
                         

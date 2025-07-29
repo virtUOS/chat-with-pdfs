@@ -12,12 +12,12 @@ from streamlit_dimensions import st_dimensions
 from ..utils.logger import Logger
 from ..utils.source import format_source_for_display
 from ..utils.i18n import I18n
-from ..core.document_manager import DocumentManager
+from ..utils.ragflow_common import get_available_ragflow_models
+from ..core.ragflow_document_manager import RAGFlowDocumentManager
 from .components import (
     display_document_info, display_document_images,
 )
 from .ocr_warning import display_ocr_warning, display_ocr_status_in_sidebar
-from ..config import MODELS
 from .handlers import handle_query_submission, handle_settings_change
 
 def render_sidebar() -> None:
@@ -84,7 +84,7 @@ def render_sidebar() -> None:
                                             (len(uploaded_files) == 1 or i == len(uploaded_files) - 1))
                             
                             # Process the file with multi-upload information
-                            DocumentManager.process_document(
+                            RAGFlowDocumentManager.process_document(
                                 uploaded_file,
                                 set_as_current=set_as_current,
                                 multi_upload=(len(uploaded_files) > 1)
@@ -204,27 +204,34 @@ def render_sidebar() -> None:
         I18n.render_language_selector()
         
         # Model selection
-        # Use model display map and display names from session state (initialized in StateManager)
-        model_display_map = st.session_state['model_display_map']
-        display_names = st.session_state['model_display_names']
-
-        # Determine current display name
-        current_model = st.session_state.get('model_name', list(MODELS.keys())[0])
-        current_display_name = None
-        for disp_name, real_name in model_display_map.items():
-            if real_name == current_model:
-                current_display_name = disp_name
-                break
-        if current_display_name is None:
-            current_display_name = display_names[0]
-
-        st.selectbox(
-            I18n.t('select_model'),
-            display_names,
-            index=display_names.index(current_display_name),
-            key='selected_display_name',
-            on_change=handle_settings_change
-        )
+        try:
+            available_models = get_available_ragflow_models()
+            if available_models:
+                model_names = [model.get('name', model.get('id', 'Unknown')) for model in available_models]
+                model_display_names = [model.get('display_name', model.get('name', model.get('id', 'Unknown'))) for model in available_models]
+                
+                # Get current selection
+                current_selection = st.session_state.get('selected_ragflow_model')
+                current_index = 0
+                if current_selection and current_selection in model_names:
+                    current_index = model_names.index(current_selection)
+                
+                selected_display = st.selectbox(
+                    I18n.t('select_model'),
+                    model_display_names,
+                    index=current_index,
+                    key='ragflow_model_selector'
+                )
+                
+                # Store the actual model name (not display name)
+                if selected_display:
+                    selected_index = model_display_names.index(selected_display)
+                    st.session_state.selected_ragflow_model = model_names[selected_index]
+            else:
+                st.warning("⚠️ No models available. Please configure models in your system.")
+        except Exception as e:
+            st.error(f"❌ Error loading available models: {str(e)}")
+            st.info("Please check your system configuration.")
                 
 
 
