@@ -68,27 +68,13 @@ def generate_stable_component_key(prefix, component_type, identifier, context=No
 
 
 def initialize_ragflow_settings():
-    """Initialize RAGFlow settings - simplified for chat assistant approach."""
+    """Initialize RAGFlow settings - no model configuration needed for chat assistants."""
     
-    # RAGFlow uses pre-configured chat assistants, so we don't need complex model configuration
-    # Just store a simple default configuration for any legacy code that might reference it
-    model_name = st.session_state.get('model_name', 'google/gemma-3-27b-it')  # Default from your logs
+    # RAGFlow uses pre-configured chat assistants with their own models
+    # No model configuration needed here
+    Logger.info("[RAGFlow INIT] Using pre-configured chat assistants - no model setup required")
     
-    Logger.info(f"[RAGFlow INIT] Requested model: {model_name}")
-    
-    # Store minimal model configuration for compatibility
-    st.session_state.ragflow_model_config = {
-        'model_name': model_name,
-        'temperature': 0.2,
-        'model_type': 'custom',
-        'api_base': 'https://vllm-test.virtuos.uni-osnabrueck.de/v1',  # From your logs
-        'api_key': 'DvZFunRfbwu3PNt48oldmk2W'  # From your logs
-    }
-    
-    Logger.info(f"[RAGFlow INIT] Configured for custom model: {model_name} at {st.session_state.ragflow_model_config['api_base']}")
-    Logger.info(f"[RAGFlow INIT] Model configuration stored: {st.session_state.ragflow_model_config}")
-    
-    return model_name
+    return None
 
 
 def create_empty_directories():
