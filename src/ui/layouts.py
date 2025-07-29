@@ -9,7 +9,7 @@ from streamlit_js_eval import streamlit_js_eval
 from streamlit_dimensions import st_dimensions
 
 from ..utils.logger import Logger
-from ..utils.source import format_source_for_display
+from ..utils.source import format_source_for_display, get_source_page_numbers_for_display, format_page_numbers_for_display, get_source_annotation_snippets
 from ..utils.i18n import I18n
 from ..utils.ragflow_common import get_available_ragflow_assistants, set_selected_ragflow_assistant, get_assistant_documents, get_assistant_dataset_names
 from .components import (
@@ -184,7 +184,8 @@ def render_main_content() -> None:
                 annotations = create_annotations_from_sources(
                     doc_response['answer'],
                     doc_response['sources'],
-                    citation_mapping
+                    citation_mapping,
+                    current_file  # Pass current document name to filter sources
                 )
                 Logger.info(f"Created {len(annotations)} annotations for document {current_file}")
             
@@ -281,24 +282,12 @@ def render_main_content() -> None:
                                                         except Exception as e:
                                                             Logger.warning(f"Error logging full source text: {e}")
                                                         
-                                                        # Extract page number for prominent label
+                                                        # Extract all page numbers that this source spans
                                                         try:
-                                                            if isinstance(source, dict):
-                                                                # RAGFlow format: source is a dict with metadata dict
-                                                                page_num = source.get('metadata', {}).get('page', 'N/A')
-                                                            elif hasattr(source, 'node'):
-                                                                # LlamaIndex format
-                                                                page_num = source.node.metadata.get('page', 'N/A')
-                                                            elif hasattr(source, 'metadata') and hasattr(source, 'text'):
-                                                                # Alternative LlamaIndex format
-                                                                page_num = source.metadata.get('page', 'N/A')
-                                                            else:
-                                                                page_num = 'Unknown'
+                                                            page_numbers = get_source_page_numbers_for_display(source)
+                                                            page_display = format_page_numbers_for_display(page_numbers)
                                                         except Exception:
-                                                            page_num = 'Error'
-                                                        
-                                                        # Get raw source text
-                                                        source_text = format_source_for_display(source)
+                                                            page_display = 'Error'
                                                         
                                                         # Get document name and similarity for nice display
                                                         if isinstance(source, dict):
@@ -310,11 +299,25 @@ def render_main_content() -> None:
                                                         
                                                         # Display in a nice format like the test script
                                                         st.markdown(f"**{citation_num}. {doc_name}** (similarity: {similarity:.3f})")
-                                                        if page_num != 'N/A':
-                                                            st.caption(f"📄 Page {page_num}")
+                                                        if page_display not in ['N/A', 'Error']:
+                                                            st.caption(f"📄 {page_display}")
                                                         
-                                                        # Display source text as clean markdown (not code block)
-                                                        st.markdown(f"   {source_text}")
+                                                        # Check if we have multiple annotation snippets
+                                                        annotation_snippets = get_source_annotation_snippets(source)
+                                                        
+                                                        if annotation_snippets and len(annotation_snippets) > 1:
+                                                            # Display individual snippets for each annotation
+                                                            st.markdown("**Multiple text segments:**")
+                                                            for i, snippet in enumerate(annotation_snippets):
+                                                                st.markdown(f"**Segment {i+1}** (Page {snippet['page']}):")
+                                                                st.markdown(f"   _{snippet['text']}_")
+                                                                if i < len(annotation_snippets) - 1:
+                                                                    st.markdown("")  # Add spacing between snippets
+                                                        else:
+                                                            # Display single source text as before
+                                                            source_text = format_source_for_display(source)
+                                                            st.markdown(f"   {source_text}")
+                                                        
                                                         st.markdown("---")  # Add separator between sources
                                                         displayed_sources.add(original_source_index)
                                                 else:

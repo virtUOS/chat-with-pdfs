@@ -10,7 +10,7 @@ from datetime import datetime
 
 from ..utils.logger import Logger
 from ..utils.i18n import I18n
-from ..utils.source import extract_citation_indices, format_source_for_display
+from ..utils.source import extract_citation_indices, format_source_for_display, get_source_page_numbers_for_display, format_page_numbers_for_display, get_source_annotation_snippets
 from ..core.state_manager import StateManager
 from ..core.ragflow_chat_engine import RAGFlowChatEngine
 from ..ragflow_client import create_client
@@ -147,24 +147,12 @@ def display_ragflow_document_info(ragflow_doc: dict) -> None:
                                 # Get the source using the original index
                                 source = sources[original_source_index]
                                 
-                                # Extract page number for prominent label
+                                # Extract all page numbers that this source spans
                                 try:
-                                    if isinstance(source, dict):
-                                        # RAGFlow format: source is a dict with metadata dict
-                                        page_num = source.get('metadata', {}).get('page', 'N/A')
-                                    elif hasattr(source, 'node'):
-                                        # LlamaIndex format
-                                        page_num = source.node.metadata.get('page', 'N/A')
-                                    elif hasattr(source, 'metadata') and hasattr(source, 'text'):
-                                        # Alternative LlamaIndex format
-                                        page_num = source.metadata.get('page', 'N/A')
-                                    else:
-                                        page_num = 'Unknown'
+                                    page_numbers = get_source_page_numbers_for_display(source)
+                                    page_display = format_page_numbers_for_display(page_numbers)
                                 except Exception:
-                                    page_num = 'Error'
-                                
-                                # Get raw source text
-                                source_text = format_source_for_display(source)
+                                    page_display = 'Error'
                                 
                                 # Get document name and similarity for nice display
                                 if isinstance(source, dict):
@@ -176,11 +164,25 @@ def display_ragflow_document_info(ragflow_doc: dict) -> None:
                                 
                                 # Display in a nice format like the test script
                                 st.markdown(f"**{citation_num}. {doc_name}** (similarity: {similarity:.3f})")
-                                if page_num != 'N/A':
-                                    st.caption(f"📄 Page {page_num}")
+                                if page_display not in ['N/A', 'Error']:
+                                    st.caption(f"📄 {page_display}")
                                 
-                                # Display source text as clean markdown (not code block)
-                                st.markdown(f"   {source_text}")
+                                # Check if we have multiple annotation snippets
+                                annotation_snippets = get_source_annotation_snippets(source)
+                                
+                                if annotation_snippets and len(annotation_snippets) > 1:
+                                    # Display individual snippets for each annotation
+                                    st.markdown("**Multiple text segments:**")
+                                    for i, snippet in enumerate(annotation_snippets):
+                                        st.markdown(f"**Segment {i+1}** (Page {snippet['page']}):")
+                                        st.markdown(f"   _{snippet['text']}_")
+                                        if i < len(annotation_snippets) - 1:
+                                            st.markdown("")  # Add spacing between snippets
+                                else:
+                                    # Display single source text as before
+                                    source_text = format_source_for_display(source)
+                                    st.markdown(f"   {source_text}")
+                                
                                 st.markdown("---")  # Add separator between sources
                                 displayed_sources.add(original_source_index)
     else:
