@@ -7,7 +7,6 @@ import time
 import uuid
 import streamlit as st
 
-from ..config import MODELS, DEFAULT_MODEL, OLLAMA_MODELS, CUSTOM_MODELS, OLLAMA_ENDPOINT, CUSTOM_API_ENDPOINT, CUSTOM_API_KEY
 from ..utils.logger import Logger
 
 def generate_unique_component_key(prefix, component_type, identifier, context=None):
@@ -69,39 +68,24 @@ def generate_stable_component_key(prefix, component_type, identifier, context=No
 
 
 def initialize_ragflow_settings():
-    """Initialize RAGFlow settings and store model configuration."""
+    """Initialize RAGFlow settings - simplified for chat assistant approach."""
     
-    model_name = st.session_state.get('model_name', DEFAULT_MODEL)
-    model_settings = MODELS.get(model_name, MODELS[DEFAULT_MODEL])
-    temperature = model_settings.get("temperature", 0.2)
+    # RAGFlow uses pre-configured chat assistants, so we don't need complex model configuration
+    # Just store a simple default configuration for any legacy code that might reference it
+    model_name = st.session_state.get('model_name', 'google/gemma-3-27b-it')  # Default from your logs
     
-    # Store model configuration for RAGFlow usage
     Logger.info(f"[RAGFlow INIT] Requested model: {model_name}")
     
-    # Store model settings in session state for RAGFlow to use
+    # Store minimal model configuration for compatibility
     st.session_state.ragflow_model_config = {
         'model_name': model_name,
-        'temperature': temperature,
-        'model_type': 'openai'  # Default type
+        'temperature': 0.2,
+        'model_type': 'custom',
+        'api_base': 'https://vllm-test.virtuos.uni-osnabrueck.de/v1',  # From your logs
+        'api_key': 'DvZFunRfbwu3PNt48oldmk2W'  # From your logs
     }
     
-    # Determine model type for RAGFlow configuration
-    if model_name in OLLAMA_MODELS:
-        st.session_state.ragflow_model_config['model_type'] = 'ollama'
-        st.session_state.ragflow_model_config['base_url'] = OLLAMA_ENDPOINT
-        Logger.info(f"[RAGFlow INIT] Configured for Ollama model: {model_name} at {OLLAMA_ENDPOINT}")
-    elif model_name in CUSTOM_MODELS:
-        st.session_state.ragflow_model_config['model_type'] = 'custom'
-        st.session_state.ragflow_model_config['api_base'] = CUSTOM_API_ENDPOINT
-        st.session_state.ragflow_model_config['api_key'] = CUSTOM_API_KEY
-        Logger.info(f"[RAGFlow INIT] Configured for custom model: {model_name} at {CUSTOM_API_ENDPOINT}")
-    else:
-        st.session_state.ragflow_model_config['model_type'] = 'openai'
-        Logger.info(f"[RAGFlow INIT] Configured for OpenAI model: {model_name}")
-    
-    # Ensure OpenAI API key is set in environment (for fallback)
-    os.environ["OPENAI_API_KEY"] = os.environ.get("OPENAI_API_KEY", "")
-    
+    Logger.info(f"[RAGFlow INIT] Configured for custom model: {model_name} at {st.session_state.ragflow_model_config['api_base']}")
     Logger.info(f"[RAGFlow INIT] Model configuration stored: {st.session_state.ragflow_model_config}")
     
     return model_name
