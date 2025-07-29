@@ -6,9 +6,197 @@ import os
 import streamlit as st
 import ast
 import fitz  # PyMuPDF
+from datetime import datetime
 
 from ..utils.logger import Logger
 from ..utils.i18n import I18n
+from ..utils.source import extract_citation_indices, format_source_for_display
+from ..core.state_manager import StateManager
+from ..core.ragflow_chat_engine import RAGFlowChatEngine
+from ..ragflow_client import create_client
+
+def display_ragflow_document_info(ragflow_doc: dict) -> None:
+    """Display metadata information for the current RAGFlow document."""
+    if not ragflow_doc:
+        st.warning("No document information available")
+        return
+    
+    # Get additional document details from RAGFlow API
+    doc_details = _get_ragflow_document_details(ragflow_doc)
+    
+    # Create two columns for better layout
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        # Document name with icon
+        doc_name = ragflow_doc.get('name', 'Unknown Document')
+        st.markdown(f"**📋 Document Name**")
+        st.markdown(f"   {doc_name}")
+        st.markdown("")
+        
+        # File size if available
+        size = ragflow_doc.get('size', 0)
+        if size > 0:
+            # Convert bytes to human readable format
+            if size < 1024:
+                size_str = f"{size} B"
+            elif size < 1024 * 1024:
+                size_str = f"{size / 1024:.1f} KB"
+            else:
+                size_str = f"{size / (1024 * 1024):.1f} MB"
+            st.markdown(f"**📊 File Size**")
+            st.markdown(f"   {size_str}")
+            st.markdown("")
+        
+        # Document type
+        doc_type = ragflow_doc.get('type', 'Unknown').upper()
+        st.markdown(f"**📎 Document Type**")
+        st.markdown(f"   {doc_type}")
+        st.markdown("")
+    
+    with col2:
+        # Dataset information - only show ID, not the redundant name
+        dataset_id = ragflow_doc.get('dataset_id', 'Unknown')
+        st.markdown(f"**🗂️ Dataset ID**")
+        st.markdown(f"   `{dataset_id}`")
+        st.markdown("")
+        
+        # Chunk count - get from detailed info if available
+        chunk_count = doc_details.get('chunk_num', ragflow_doc.get('chunk_num', 0))
+        if chunk_count > 0:
+            st.markdown(f"**🧩 Text Chunks**")
+            st.markdown(f"   {chunk_count} chunks")
+            st.markdown("")
+        
+        # Page count - try multiple sources
+        page_count = doc_details.get('page_count')
+        
+        # If not available from chunks, try to get from cached PDF
+        if not page_count:
+            page_count = _get_page_count_from_cached_pdf(ragflow_doc)
+        
+        if page_count:
+            st.markdown(f"**📖 Pages**")
+            st.markdown(f"   {page_count} pages")
+            st.markdown("")
+    
+    # Creation and update dates in a single row
+    created_date = ragflow_doc.get('create_date')
+    update_date = ragflow_doc.get('update_date')
+    
+    if created_date or update_date:
+        st.markdown("**📅 Timestamps**")
+        date_col1, date_col2 = st.columns(2)
+        
+        if created_date:
+            # Format the date nicely
+            try:
+                # Parse the date and format it nicely
+                dt = datetime.strptime(created_date, "%a, %d %b %Y %H:%M:%S %Z")
+                formatted_date = dt.strftime("%B %d, %Y at %H:%M")
+                date_col1.caption(f"Created: {formatted_date}")
+            except:
+                date_col1.caption(f"Created: {created_date}")
+        
+        if update_date:
+            try:
+                dt = datetime.strptime(update_date, "%a, %d %b %Y %H:%M:%S %Z")
+                formatted_date = dt.strftime("%B %d, %Y at %H:%M")
+                date_col2.caption(f"Updated: {formatted_date}")
+            except:
+                date_col2.caption(f"Updated: {update_date}")
+    
+    # Document summary section
+    st.markdown("---")
+    st.markdown("**📝 Document Summary**")
+    
+    # Try to get or generate a summary
+    summary_data = _get_or_generate_document_summary(ragflow_doc)
+    if summary_data:
+        # Display the summary text
+        if isinstance(summary_data, dict):
+            summary_text = summary_data.get('text', '')
+            sources = summary_data.get('sources', [])
+            citation_mapping = summary_data.get('citation_mapping', {})
+        else:
+            # Legacy string format
+            summary_text = summary_data
+            sources = []
+            citation_mapping = {}
+        
+        st.markdown(summary_text)
+        
+        # Display sources if available (like in chat)
+        if sources and citation_mapping:
+            # Extract citation numbers from the summary
+            citations = extract_citation_indices(summary_text)
+            
+            if citations:
+                with st.expander("📚 Show Sources"):
+                    displayed_sources = set()
+                    
+                    for citation_num in sorted(citations):
+                        # Get the original source index from the mapping
+                        if str(citation_num) in citation_mapping:
+                            original_source_index = citation_mapping[str(citation_num)]
+                            
+                            if original_source_index in displayed_sources:
+                                continue  # Skip if already displayed this source
+                            
+                            if original_source_index < len(sources):
+                                # Get the source using the original index
+                                source = sources[original_source_index]
+                                
+                                # Extract page number for prominent label
+                                try:
+                                    if isinstance(source, dict):
+                                        # RAGFlow format: source is a dict with metadata dict
+                                        page_num = source.get('metadata', {}).get('page', 'N/A')
+                                    elif hasattr(source, 'node'):
+                                        # LlamaIndex format
+                                        page_num = source.node.metadata.get('page', 'N/A')
+                                    elif hasattr(source, 'metadata') and hasattr(source, 'text'):
+                                        # Alternative LlamaIndex format
+                                        page_num = source.metadata.get('page', 'N/A')
+                                    else:
+                                        page_num = 'Unknown'
+                                except Exception:
+                                    page_num = 'Error'
+                                
+                                # Get raw source text
+                                source_text = format_source_for_display(source)
+                                
+                                # Get document name and similarity for nice display
+                                if isinstance(source, dict):
+                                    doc_name = source.get('metadata', {}).get('document_name', 'Unknown Document')
+                                    similarity = source.get('metadata', {}).get('similarity', 0.0)
+                                else:
+                                    doc_name = 'Unknown Document'
+                                    similarity = 0.0
+                                
+                                # Display in a nice format like the test script
+                                st.markdown(f"**{citation_num}. {doc_name}** (similarity: {similarity:.3f})")
+                                if page_num != 'N/A':
+                                    st.caption(f"📄 Page {page_num}")
+                                
+                                # Display source text as clean markdown (not code block)
+                                st.markdown(f"   {source_text}")
+                                st.markdown("---")  # Add separator between sources
+                                displayed_sources.add(original_source_index)
+    else:
+        # Show a button to generate summary
+        if st.button("🤖 Generate Summary", key=f"generate_summary_{ragflow_doc.get('id')}"):
+            with st.spinner("Generating document summary..."):
+                summary_response = _generate_document_summary_with_assistant(ragflow_doc)
+                if summary_response:
+                    # Store the summary for future use
+                    if 'ragflow_document_summaries' not in st.session_state:
+                        st.session_state.ragflow_document_summaries = {}
+                    st.session_state.ragflow_document_summaries[ragflow_doc.get('id')] = summary_response
+                    st.rerun()
+                else:
+                    st.error("Failed to generate summary")
+
 
 def display_document_info(file_name: str) -> None:
     """Display metadata information for the current document."""
@@ -115,7 +303,6 @@ def display_document_images(file_name: str, container_height: int | None = None)
         return
     
     # Get unified images directly from session state
-    from ..core.state_manager import StateManager
     unified_images = StateManager.get_document_unified_images(doc_id)
     
     # Debug log unified images
@@ -273,5 +460,245 @@ def _extract_document_metadata(vector_index):
                 return first_node.metadata
     except Exception as e:
         Logger.error(f"Error extracting metadata: {str(e)}")
+    
+    return None
+
+
+def _get_page_count_from_cached_pdf(ragflow_doc: dict) -> int | None:
+    """Get page count from cached PDF data using PyMuPDF."""
+    try:
+        doc_name = ragflow_doc.get('name', '')
+        pdf_cache_key = f"ragflow_pdf_{doc_name}"
+        
+        # Check if we have cached PDF data
+        if pdf_cache_key in st.session_state:
+            pdf_data = st.session_state[pdf_cache_key]
+            
+            # Use PyMuPDF to count pages
+            doc = fitz.open(stream=pdf_data, filetype="pdf")
+            page_count = len(doc)
+            doc.close()
+            
+            return page_count
+        
+    except Exception as e:
+        Logger.warning(f"Could not get page count from cached PDF: {e}")
+    
+    return None
+
+
+def display_ragflow_document_images(ragflow_doc: dict, container_height: int | None = None) -> None:
+    """Display images extracted from RAGFlow document using PyMuPDF."""
+    if not ragflow_doc:
+        st.info("No document selected")
+        return
+    
+    doc_name = ragflow_doc.get('name', '')
+    pdf_cache_key = f"ragflow_pdf_{doc_name}"
+    
+    # Check if we have cached PDF data
+    if pdf_cache_key not in st.session_state:
+        st.info("📄 PDF not loaded yet. Please wait for the PDF to load in the viewer.")
+        return
+    
+    pdf_data = st.session_state[pdf_cache_key]
+    
+    # Extract images using PyMuPDF
+    try:
+        with st.spinner("Extracting images from document..."):
+            images = _extract_images_from_pdf(pdf_data, doc_name)
+        
+        if images:
+            st.subheader(f"Images from {doc_name}")
+            st.caption(f"Found {len(images)} images")
+            
+            # Sort images by page number first, then by index within page
+            sorted_images = sorted(images, key=lambda x: (x.get('page', 0), x.get('index', 0)))
+            
+            # Use the provided dynamic height for the images container
+            with st.container(height=container_height):
+                # Group images by page for better organization
+                images_by_page = {}
+                for img_info in sorted_images:
+                    page_num = img_info.get('page', 'Unknown')
+                    if page_num not in images_by_page:
+                        images_by_page[page_num] = []
+                    images_by_page[page_num].append(img_info)
+                
+                # Display images organized by page
+                for page_num in sorted(images_by_page.keys()):
+                    page_images = images_by_page[page_num]
+                    
+                    # Page header
+                    st.markdown(f"### 📄 Page {page_num}")
+                    st.markdown(f"*{len(page_images)} image(s) on this page*")
+                    
+                    # Create columns for images on this page (max 3 per row)
+                    num_cols = min(3, len(page_images))
+                    cols = st.columns(num_cols)
+                    
+                    for i, img_info in enumerate(page_images):
+                        with cols[i % num_cols]:
+                            try:
+                                img_index = img_info.get('index', i)
+                                caption = f"Image {img_index + 1}"
+                                
+                                st.image(img_info['image_data'], caption=caption, width=300)
+                                
+                            except Exception as e:
+                                Logger.error(f"Error displaying image {i} on page {page_num}: {e}")
+                                st.warning(f"Error displaying image {i+1}")
+                    
+                    # Add separator between pages
+                    if page_num != max(images_by_page.keys()):
+                        st.markdown("---")
+        else:
+            st.info("No images found in this document")
+            
+    except Exception as e:
+        Logger.error(f"Error extracting images: {e}")
+        st.error(f"Error extracting images: {str(e)}")
+
+
+def _extract_images_from_pdf(pdf_data: bytes, doc_name: str) -> list:
+    """Extract images from PDF using PyMuPDF."""
+    images = []
+    
+    try:
+        # Open PDF from bytes
+        doc = fitz.open(stream=pdf_data, filetype="pdf")
+        
+        for page_num in range(len(doc)):
+            page = doc[page_num]
+            
+            # Get images from the page
+            image_list = page.get_images()
+            
+            for img_index, img in enumerate(image_list):
+                try:
+                    # Get image data
+                    xref = img[0]
+                    pix = fitz.Pixmap(doc, xref)
+                    
+                    # Convert to PNG if not already
+                    if pix.n - pix.alpha < 4:  # GRAY or RGB
+                        img_data = pix.tobytes("png")
+                        
+                        images.append({
+                            'image_data': img_data,
+                            'page': page_num + 1,  # 1-based page numbering
+                            'index': img_index,
+                            'format': 'png'
+                        })
+                    else:  # CMYK: convert to RGB first
+                        pix1 = fitz.Pixmap(fitz.csRGB, pix)
+                        img_data = pix1.tobytes("png")
+                        
+                        images.append({
+                            'image_data': img_data,
+                            'page': page_num + 1,  # 1-based page numbering
+                            'index': img_index,
+                            'format': 'png'
+                        })
+                        pix1 = None
+                    
+                    pix = None
+                    
+                except Exception as e:
+                    Logger.warning(f"Could not extract image {img_index} from page {page_num + 1}: {e}")
+                    continue
+        
+        doc.close()
+        Logger.info(f"Extracted {len(images)} images from {doc_name}")
+        
+    except Exception as e:
+        Logger.error(f"Error processing PDF for image extraction: {e}")
+    
+    return images
+
+
+def _get_ragflow_document_details(ragflow_doc: dict) -> dict:
+    """Get additional document details from RAGFlow API."""
+    try:
+        client = create_client()
+        
+        dataset_id = ragflow_doc.get('dataset_id')
+        doc_id = ragflow_doc.get('id')
+        
+        if not dataset_id or not doc_id:
+            return {}
+        
+        # Try to get document chunks to get accurate chunk count
+        chunks_response = client._make_request('GET', f'/api/v1/datasets/{dataset_id}/documents/{doc_id}/chunks')
+        if chunks_response.status_code == 200:
+            chunks_data = chunks_response.json()
+            if chunks_data.get('code') == 0:
+                chunks = chunks_data.get('data', {}).get('chunks', [])
+                return {
+                    'chunk_num': len(chunks),
+                    'page_count': _extract_page_count_from_chunks(chunks)
+                }
+    except Exception as e:
+        Logger.warning(f"Could not get detailed document info: {e}")
+    
+    return {}
+
+
+def _extract_page_count_from_chunks(chunks: list) -> int | None:
+    """Extract page count from document chunks."""
+    try:
+        max_page = 0
+        for chunk in chunks:
+            # Look for page information in chunk metadata
+            if isinstance(chunk, dict):
+                # Check various possible locations for page info
+                page_num = None
+                if 'page' in chunk:
+                    page_num = chunk['page']
+                elif 'metadata' in chunk and isinstance(chunk['metadata'], dict):
+                    page_num = chunk['metadata'].get('page')
+                
+                if page_num is not None:
+                    try:
+                        page_int = int(page_num)
+                        max_page = max(max_page, page_int)
+                    except (ValueError, TypeError):
+                        pass
+        
+        return max_page if max_page > 0 else None
+    except Exception as e:
+        Logger.warning(f"Error extracting page count: {e}")
+        return None
+
+
+def _get_or_generate_document_summary(ragflow_doc: dict) -> dict | str | None:
+    """Get existing summary or return None to trigger generation."""
+    doc_id = ragflow_doc.get('id')
+    if not doc_id:
+        return None
+    
+    # Check if we have a cached summary
+    summaries = st.session_state.get('ragflow_document_summaries', {})
+    return summaries.get(doc_id)
+
+
+def _generate_document_summary_with_assistant(ragflow_doc: dict) -> dict | None:
+    """Generate a document summary using the RAGFlow assistant."""
+    try:
+        # Use the chat engine to ask for a summary
+        summary_query = f"Please provide a brief summary of the document '{ragflow_doc.get('name', 'this document')}'. Include the main topics, key points, and purpose of the document in 2-3 sentences."
+        
+        response = RAGFlowChatEngine.process_query(summary_query, ragflow_doc.get('name', ''))
+        
+        if response and response.get('answer'):
+            # Return the full response with sources and citation mapping
+            return {
+                'text': response['answer'],
+                'sources': response.get('sources', []),
+                'citation_mapping': response.get('citation_mapping', {})
+            }
+        
+    except Exception as e:
+        Logger.error(f"Error generating document summary: {e}")
     
     return None

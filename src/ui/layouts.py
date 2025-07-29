@@ -13,7 +13,7 @@ from ..utils.source import format_source_for_display
 from ..utils.i18n import I18n
 from ..utils.ragflow_common import get_available_ragflow_assistants, set_selected_ragflow_assistant, get_assistant_documents, get_assistant_dataset_names
 from .components import (
-    display_document_info, display_document_images,
+    display_document_info, display_document_images, display_ragflow_document_info, display_ragflow_document_images,
 )
 from .handlers import handle_query_submission
 
@@ -127,17 +127,6 @@ def render_main_content() -> None:
     
     # Display document information
     st.subheader(f"💬 Chatting with: {current_file}")
-    
-    # Show document metadata
-    if current_ragflow_doc:
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.caption(f"📄 **Document:** {current_ragflow_doc.get('name', 'Unknown')}")
-        with col2:
-            st.caption(f"📚 **Dataset:** {current_ragflow_doc.get('dataset_id', 'Unknown')}")
-        with col3:
-            chunk_count = current_ragflow_doc.get('chunk_count', 0)
-            st.caption(f"🧩 **Chunks:** {chunk_count}")
     
     # Split the display into two columns - one for PDF and one for content tabs
     pdf_column, content_column = st.columns([50, 50], gap="medium")
@@ -402,22 +391,29 @@ def render_main_content() -> None:
                             
                             # Process the suggestion
                             # Call the query submission handler
-                            handle_query_submission(prompt, current_file, chat_container)
+                            if current_file:
+                                handle_query_submission(prompt, current_file, chat_container)
                             st.rerun()
                     except Exception as e:
                         Logger.error(f"Error displaying suggestions: {e}")
                         
             # Chat input
             user_query = st.chat_input(I18n.t('type_question_here'))
-            if user_query:
+            if user_query and current_file:
                 handle_query_submission(user_query, current_file, chat_container)
                 st.rerun()
         
         # Information tab
         with info_tab:
-            display_document_info(current_file)
+            if current_ragflow_doc:
+                display_ragflow_document_info(current_ragflow_doc)
+            else:
+                st.info("No document selected")
         
         # Images tab
         with images_tab:
-            display_document_images(current_file, container_height=images_container_height)
+            if current_ragflow_doc:
+                display_ragflow_document_images(current_ragflow_doc, container_height=images_container_height)
+            else:
+                st.info("No document selected")
 
