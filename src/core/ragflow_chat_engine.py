@@ -92,22 +92,8 @@ class RAGFlowChatEngine:
             answer = data.get('answer', '')
             reference = data.get('reference', {})
             
-            # Debug: Log the actual response structure to understand what RAGFlow is returning
-            Logger.info(f"RAGFlow response - Answer length: {len(answer)}")
-            Logger.info(f"RAGFlow response - Reference type: {type(reference)}")
-            Logger.info(f"RAGFlow response - Reference content: {reference}")
-            Logger.info(f"RAGFlow response - Full data keys: {list(data.keys())}")
-            if reference:
-                Logger.info(f"RAGFlow response - Reference keys: {list(reference.keys())}")
-                if 'chunks' in reference:
-                    chunks = reference.get('chunks', [])
-                    Logger.info(f"RAGFlow response - Found {len(chunks)} chunks")
-                    if chunks:
-                        Logger.info(f"RAGFlow response - First chunk keys: {list(chunks[0].keys())}")
-                else:
-                    Logger.info("RAGFlow response - No 'chunks' key in reference")
-            else:
-                Logger.info("RAGFlow response - Reference is empty or None")
+            # Log basic response info
+            Logger.info(f"RAGFlow response - Answer length: {len(answer)}, Found {len(reference.get('chunks', []))} source chunks")
             
             # Update session ID if provided
             if data.get('session_id'):
@@ -121,6 +107,11 @@ class RAGFlowChatEngine:
                 reference, file_name
             )
             
+            # Create citation mapping for the UI
+            citation_mapping = {}
+            for i, source in enumerate(sources):
+                citation_mapping[str(i + 1)] = i  # Map citation number to source index
+            
             # Store response for future reference
             if 'document_responses' not in st.session_state:
                 st.session_state['document_responses'] = {}
@@ -131,6 +122,7 @@ class RAGFlowChatEngine:
                 'answer': answer,
                 'sources': sources,
                 'images': images,
+                'citation_mapping': citation_mapping,
                 'ragflow_reference': reference  # Store original RAGFlow reference
             }
             
@@ -139,7 +131,8 @@ class RAGFlowChatEngine:
             return {
                 'answer': answer,
                 'sources': sources,
-                'images': images
+                'images': images,
+                'citation_mapping': citation_mapping
             }
         
         except Exception as e:
@@ -169,12 +162,19 @@ class RAGFlowChatEngine:
         chunks = reference.get('chunks', [])
         
         for i, chunk in enumerate(chunks):
+            # Extract page number from positions if available
+            page_number = None
+            positions = chunk.get('positions', [])
+            if positions and len(positions) > 0:
+                # First position should contain page number
+                page_number = positions[0][0] if len(positions[0]) > 0 else None
+            
             # Create a source object compatible with existing UI
             source = {
                 'id': chunk.get('id', f'chunk_{i}'),
                 'text': chunk.get('content', ''),
                 'metadata': {
-                    'page': chunk.get('page_number'),
+                    'page': page_number,
                     'document_name': chunk.get('document_name', 'Unknown Document'),
                     'similarity': chunk.get('similarity', 0.0),
                     'chunk_id': chunk.get('id'),
