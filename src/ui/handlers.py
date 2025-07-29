@@ -6,8 +6,10 @@ import streamlit as st
 import time
 
 from ..utils.logger import Logger
-from ..core.document_manager import DocumentManager
-from ..core.chat_engine import ChatEngine
+from ..utils.ragflow_common import initialize_ragflow_settings
+from ..utils.source import extract_citation_indices
+from ..core.ragflow_document_manager import RAGFlowDocumentManager
+from ..core.ragflow_chat_engine import RAGFlowChatEngine
 
 
 def handle_file_upload(uploaded_files) -> None:
@@ -55,7 +57,7 @@ def handle_file_upload(uploaded_files) -> None:
                          (len(uploaded_files) == 1 or i == len(uploaded_files) - 1))
         
         # Process the file with multi-upload information
-        DocumentManager.process_document(
+        RAGFlowDocumentManager.process_document(
             uploaded_file,
             set_as_current=set_as_current,
             multi_upload=(len(uploaded_files) > 1)
@@ -98,8 +100,8 @@ def handle_query_submission(query_text: str, current_file: str, chat_container) 
     
         with st.spinner('Thinking...'):
             try:
-                # Process the query using the chat engine
-                response = ChatEngine.process_query(query_text, current_file)
+                # Process the query using the RAGFlow chat engine
+                response = RAGFlowChatEngine.process_query(query_text, current_file)
                 
                 # Extract information from the response
                 answer = response.get('answer', "Sorry, I couldn't process your query.")
@@ -108,7 +110,6 @@ def handle_query_submission(query_text: str, current_file: str, chat_container) 
                 citation_mapping = response.get('citation_mapping', {})  # Get the citation mapping
                 
                 # Extract citation numbers from the response
-                from ..utils.source import extract_citation_indices
                 citations = extract_citation_indices(answer)
                 
                 # Create citation page mapping
@@ -171,9 +172,8 @@ def handle_settings_change() -> None:
     # Update model if changed
     if model_name != st.session_state.get('model_name'):
         st.session_state.model_name = model_name
-        # Re-initialize LLM settings
-        from ..utils.common import initialize_llm_settings
-        initialize_llm_settings()
+        # Re-initialize RAGFlow settings
+        initialize_ragflow_settings()
         Logger.info(f"Model changed to: {model_name}. Will use this model for future queries.")
         # Note: We don't need to recreate query engines since the LLM will be
         # updated in the response synthesizer before each query execution

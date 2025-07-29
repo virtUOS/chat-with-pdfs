@@ -1,8 +1,11 @@
 # Core dependencies
 streamlit
-llama-index
 python-dotenv
 openai
+
+# RAGFlow dependencies
+requests
+httpx
 
 # PDF processing
 pymupdf4llm
@@ -13,7 +16,6 @@ streamlit-js-eval
 streamlit-dimensions
 streamlit-pdf-viewer
 
-# LLM providers
-llama_index.llms.openai_like
-llama-index-llms-openai
-llama-index-llms-ollama
+# Additional utilities for RAGFlow integration
+pydantic
+typing-extensions
