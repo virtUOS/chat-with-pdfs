@@ -146,50 +146,48 @@ def format_chat_history(history):
     return html
 
 
-def get_available_ragflow_models():
+def get_available_ragflow_assistants():
     """
-    Get available models from RAGFlow server.
+    Get available chat assistants from RAGFlow server.
     
     Returns:
-        list: List of available model dictionaries from RAGFlow
+        list: List of available chat assistant dictionaries from RAGFlow
     """
     try:
         from ..ragflow_client import create_client
         client = create_client()
-        response = client.get_available_models()
+        response = client.get_chat_assistants()
         
         if response.get('code') == 0:
             return response.get('data', [])
         else:
-            Logger.error(f"Failed to get RAGFlow models: {response.get('message')}")
+            Logger.error(f"Failed to get RAGFlow assistants: {response.get('message')}")
             return []
     except Exception as e:
-        Logger.error(f"Error fetching RAGFlow models: {str(e)}")
+        Logger.error(f"Error fetching RAGFlow assistants: {str(e)}")
         return []
 
 
-def get_ragflow_model_for_assistant():
+def get_selected_ragflow_assistant():
     """
-    Get the selected model name for RAGFlow chat assistant creation.
+    Get the selected chat assistant ID for RAGFlow.
     
     Returns:
-        str: Selected model name from RAGFlow available models
+        str: Selected assistant ID from session state or None
     """
-    # Get the selected model from session state
-    selected_model = st.session_state.get('selected_ragflow_model')
+    return st.session_state.get('selected_ragflow_assistant')
+
+
+def set_selected_ragflow_assistant(assistant_id: str):
+    """
+    Set the selected chat assistant ID in session state.
     
-    if selected_model:
-        return selected_model
-    
-    # If no model selected, get the first available model
-    available_models = get_available_ragflow_models()
-    if available_models:
-        first_model = available_models[0].get('name', available_models[0].get('id'))
-        Logger.info(f"No model selected, using first available: {first_model}")
-        return first_model
-    
-    # If no models available, raise an error
-    raise ValueError("No models available in RAGFlow. Please configure models in your RAGFlow instance.")
+    Args:
+        assistant_id: The ID of the selected assistant
+    """
+    st.session_state.selected_ragflow_assistant = assistant_id
+    # Also store the assistant ID for the chat engine to use
+    st.session_state.ragflow_chat_id = assistant_id
 
 
 def validate_ragflow_environment():

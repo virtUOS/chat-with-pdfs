@@ -12,7 +12,7 @@ from streamlit_dimensions import st_dimensions
 from ..utils.logger import Logger
 from ..utils.source import format_source_for_display
 from ..utils.i18n import I18n
-from ..utils.ragflow_common import get_available_ragflow_models
+from ..utils.ragflow_common import get_available_ragflow_assistants, set_selected_ragflow_assistant
 from ..core.ragflow_document_manager import RAGFlowDocumentManager
 from .components import (
     display_document_info, display_document_images,
@@ -203,35 +203,37 @@ def render_sidebar() -> None:
         # Language selection
         I18n.render_language_selector()
         
-        # Model selection
+        # Chat Assistant selection
         try:
-            available_models = get_available_ragflow_models()
-            if available_models:
-                model_names = [model.get('name', model.get('id', 'Unknown')) for model in available_models]
-                model_display_names = [model.get('display_name', model.get('name', model.get('id', 'Unknown'))) for model in available_models]
+            available_assistants = get_available_ragflow_assistants()
+            if available_assistants:
+                assistant_names = [assistant.get('name', 'Unnamed Assistant') for assistant in available_assistants]
+                assistant_ids = [assistant.get('id') for assistant in available_assistants]
                 
                 # Get current selection
-                current_selection = st.session_state.get('selected_ragflow_model')
+                current_selection = st.session_state.get('selected_ragflow_assistant')
                 current_index = 0
-                if current_selection and current_selection in model_names:
-                    current_index = model_names.index(current_selection)
+                if current_selection and current_selection in assistant_ids:
+                    current_index = assistant_ids.index(current_selection)
                 
-                selected_display = st.selectbox(
-                    I18n.t('select_model'),
-                    model_display_names,
+                selected_name = st.selectbox(
+                    "Select Chat Assistant",
+                    assistant_names,
                     index=current_index,
-                    key='ragflow_model_selector'
+                    key='ragflow_assistant_selector',
+                    help="Choose from your configured RAGFlow chat assistants"
                 )
                 
-                # Store the actual model name (not display name)
-                if selected_display:
-                    selected_index = model_display_names.index(selected_display)
-                    st.session_state.selected_ragflow_model = model_names[selected_index]
+                # Store the actual assistant ID
+                if selected_name:
+                    selected_index = assistant_names.index(selected_name)
+                    selected_assistant_id = assistant_ids[selected_index]
+                    set_selected_ragflow_assistant(selected_assistant_id)
             else:
-                st.warning("⚠️ No models available. Please configure models in your system.")
+                st.warning("⚠️ No chat assistants available. Please create chat assistants in your RAGFlow instance.")
         except Exception as e:
-            st.error(f"❌ Error loading available models: {str(e)}")
-            st.info("Please check your system configuration.")
+            st.error(f"❌ Error loading available chat assistants: {str(e)}")
+            st.info("Please check your RAGFlow connection and configuration.")
                 
 
 

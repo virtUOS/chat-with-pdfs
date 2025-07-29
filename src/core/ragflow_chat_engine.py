@@ -19,55 +19,16 @@ class RAGFlowChatEngine:
         self._ensure_chat_assistant()
     
     def _ensure_chat_assistant(self):
-        """Ensure a chat assistant exists for the current dataset."""
-        try:
-            # Check if we have a stored chat assistant ID
-            if 'ragflow_chat_id' not in st.session_state:
-                dataset_id = st.session_state.get('ragflow_dataset_id')
-                if not dataset_id:
-                    raise Exception("No RAGFlow dataset ID found")
-                
-                # Try to find existing chat assistant or create new one
-                assistants_response = self.client.get_chat_assistants()
-                
-                if assistants_response.get('code') == 0:
-                    assistants = assistants_response.get('data', [])
-                    
-                    # Look for existing "chat-with-docs" assistant
-                    existing_assistant = None
-                    for assistant in assistants:
-                        if assistant.get('name') == 'chat-with-docs':
-                            existing_assistant = assistant
-                            break
-                    
-                    if existing_assistant:
-                        st.session_state.ragflow_chat_id = existing_assistant.get('id')
-                        Logger.info(f"Using existing RAGFlow chat assistant: {existing_assistant.get('id')}")
-                    else:
-                        # Get the selected model for RAGFlow
-                        from ..utils.ragflow_common import get_ragflow_model_for_assistant
-                        selected_model = get_ragflow_model_for_assistant()
-                        
-                        # Create new chat assistant
-                        create_response = self.client.create_chat_assistant(
-                            name='chat-with-docs',
-                            dataset_ids=[dataset_id],
-                            llm=selected_model,
-                            prompt='You are a helpful assistant that answers questions based on the provided documents. Always cite your sources and be precise in your responses.'
-                        )
-                        
-                        if create_response.get('code') == 0:
-                            assistant_data = create_response.get('data', {})
-                            st.session_state.ragflow_chat_id = assistant_data.get('id')
-                            Logger.info(f"Created new RAGFlow chat assistant: {assistant_data.get('id')}")
-                        else:
-                            raise Exception(f"Failed to create chat assistant: {create_response.get('message')}")
-                else:
-                    raise Exception(f"Failed to get chat assistants: {assistants_response.get('message')}")
-                    
-        except Exception as e:
-            Logger.error(f"Error ensuring chat assistant: {str(e)}")
-            raise
+        """Ensure a chat assistant is selected."""
+        # Check if we have a selected chat assistant ID
+        chat_id = st.session_state.get('ragflow_chat_id') or st.session_state.get('selected_ragflow_assistant')
+        
+        if not chat_id:
+            raise Exception("No chat assistant selected. Please select a chat assistant from the sidebar.")
+        
+        # Store the chat ID for use
+        st.session_state.ragflow_chat_id = chat_id
+        Logger.info(f"Using selected RAGFlow chat assistant: {chat_id}")
     
     @staticmethod
     def process_query(prompt: str, file_name: str) -> Dict[str, Any]:

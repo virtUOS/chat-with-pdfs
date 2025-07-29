@@ -72,9 +72,9 @@ SUMMARY_MODEL = os.environ.get("SUMMARY_MODEL", DEFAULT_MODEL)
 if not os.environ.get("OPENAI_API_KEY"):
     print("Warning: OPENAI_API_KEY environment variable not set")
 
-# Debug information
-print(f"[DEBUG] MODELS loaded: {list(MODELS.keys())}")
-print(f"[DEBUG] OLLAMA_MODELS: {OLLAMA_MODELS}")
+# Debug information (commented out for RAGFlow version)
+# print(f"[DEBUG] MODELS loaded: {list(MODELS.keys())}")
+# print(f"[DEBUG] OLLAMA_MODELS: {OLLAMA_MODELS}")
 
 
 

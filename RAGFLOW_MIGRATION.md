@@ -46,6 +46,15 @@ pip install -r requirements.txt
 3. **Multimodal Support**: Better handling of images and complex document layouts
 4. **Scalability**: Server-based architecture for better performance
 5. **Session Management**: Built-in chat session handling
+6. **Dynamic Model Selection**: Automatically detects and uses models configured in your RAGFlow instance
+
+## Model Configuration
+
+Unlike the previous LlamaIndex version, this RAGFlow implementation:
+- **Automatically detects available models** from your RAGFlow server
+- **No need to configure models in .env** - models are managed in RAGFlow
+- **Dynamic model dropdown** shows only models actually available in your instance
+- **Seamless model switching** without application restart
 
 ## Usage
 

@@ -228,19 +228,6 @@ class RAGFlowClient:
         response = self._make_request('POST', f'/api/v1/chats/{chat_id}/completions', json=data)
         return response.json()
     
-    def get_available_models(self) -> Dict[str, Any]:
-        """
-        Get list of available LLM models from RAGFlow.
-        
-        Returns:
-            Dictionary containing available models from RAGFlow server
-            
-        Raises:
-            requests.RequestException: If the request fails
-        """
-        response = self._make_request('GET', '/api/v1/llms')
-        return response.json()
-    
     def get_chunk_image(self, image_id: str) -> bytes:
         """
         Attempt to retrieve an image for a chunk by image ID.
