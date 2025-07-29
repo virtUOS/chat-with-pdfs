@@ -4,7 +4,6 @@ UI layouts for the Chat with Docs application.
 
 import os
 import streamlit as st
-import time
 from streamlit_pdf_viewer import pdf_viewer
 from streamlit_js_eval import streamlit_js_eval
 from streamlit_dimensions import st_dimensions
@@ -13,12 +12,10 @@ from ..utils.logger import Logger
 from ..utils.source import format_source_for_display
 from ..utils.i18n import I18n
 from ..utils.ragflow_common import get_available_ragflow_assistants, set_selected_ragflow_assistant, get_assistant_documents, get_assistant_dataset_names
-from ..core.ragflow_document_manager import RAGFlowDocumentManager
 from .components import (
     display_document_info, display_document_images,
 )
-from .ocr_warning import display_ocr_warning, display_ocr_status_in_sidebar
-from .handlers import handle_query_submission, handle_settings_change
+from .handlers import handle_query_submission
 
 def render_sidebar() -> None:
     """Render the sidebar with chat assistant selection and knowledge base documents."""
@@ -351,18 +348,12 @@ def render_main_content() -> None:
                                                     st.warning(f"Error displaying image: {os.path.basename(img_info['file_path']) if 'file_path' in img_info else 'Unknown'}")
             
             # Display query suggestions as pills if available (but not for scanned documents)
-            current_doc_id = st.session_state.pdf_data[current_file].get('doc_id', '')
+            # In RAGFlow, we use the document ID from current_ragflow_doc
+            current_ragflow_doc = st.session_state.get('current_ragflow_doc', {})
+            current_doc_id = current_ragflow_doc.get('id', '')
             
-            # Check if document is likely scanned
-            is_likely_scanned = False
+            # Display query suggestions if available
             if (
-                'ocr_analysis' in st.session_state and
-                current_doc_id in st.session_state.ocr_analysis
-            ):
-                is_likely_scanned = st.session_state.ocr_analysis[current_doc_id]['is_likely_scanned']
-            
-            if (
-                not is_likely_scanned and  # Only show suggestions for non-scanned documents
                 'document_query_suggestions' in st.session_state and
                 current_doc_id in st.session_state.get('document_query_suggestions', {}) and
                 st.session_state['document_query_suggestions'][current_doc_id]
