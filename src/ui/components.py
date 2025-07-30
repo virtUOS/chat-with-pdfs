@@ -13,6 +13,7 @@ from ..utils.i18n import I18n
 from ..utils.source import extract_citation_indices, format_source_for_display, get_source_page_numbers_for_display, format_page_numbers_for_display, get_source_annotation_snippets
 from ..core.state_manager import StateManager
 from ..core.ragflow_chat_engine import RAGFlowChatEngine
+from ..core.ragflow_document_manager import RAGFlowDocumentManager
 from ..ragflow_client import create_client
 
 def display_ragflow_document_info(ragflow_doc: dict) -> None:
@@ -505,10 +506,97 @@ def display_ragflow_document_images(ragflow_doc: dict, container_height: int | N
     
     pdf_data = st.session_state[pdf_cache_key]
     
-    # Extract images using PyMuPDF
+    # Get the document ID from the ragflow document mapping
+    ragflow_doc_id = ragflow_doc.get('id')
+    if not ragflow_doc_id:
+        st.info("Document ID not available")
+        return
+    
+    # Debug logging to understand the session state
+    Logger.info(f"Looking for RAGFlow document ID: {ragflow_doc_id}")
+    Logger.info(f"Available ragflow_document_mapping: {st.session_state.get('ragflow_document_mapping', {})}")
+    Logger.info(f"Available file_document_id: {st.session_state.get('file_document_id', {})}")
+    
+    # Find the corresponding document ID in our session state
+    # Check if we have a mapping from ragflow doc ID to our internal doc ID
+    doc_id = None
+    ragflow_mapping = st.session_state.get('ragflow_document_mapping', {})
+    
+    # Look for the document ID by matching the ragflow document ID
+    for file_name, mapped_ragflow_id in ragflow_mapping.items():
+        Logger.info(f"Checking file_name: {file_name}, mapped_ragflow_id: {mapped_ragflow_id}")
+        if mapped_ragflow_id == ragflow_doc_id:
+            # Get the internal document ID for this file
+            doc_id = st.session_state.get('file_document_id', {}).get(file_name)
+            Logger.info(f"Found matching file: {file_name}, internal doc_id: {doc_id}")
+            break
+    
+    if not doc_id:
+        # Try alternative approach - maybe the document name matches directly
+        Logger.info("Direct mapping failed, trying document name matching...")
+        file_document_id_map = st.session_state.get('file_document_id', {})
+        for file_name, internal_doc_id in file_document_id_map.items():
+            if doc_name in file_name or file_name in doc_name:
+                doc_id = internal_doc_id
+                Logger.info(f"Found document by name matching: {file_name} -> {doc_id}")
+                break
+    
+    if not doc_id:
+        Logger.warning(f"Could not find document mapping for RAGFlow doc {ragflow_doc_id} ({doc_name})")
+        Logger.info("RAGFlow document not processed locally - processing images on-demand...")
+        
+        # Process images on-demand for RAGFlow documents
+        try:
+            # Use the ragflow_doc_id as our internal doc_id for this session
+            temp_doc_id = f"ragflow_{ragflow_doc_id}"
+            
+            # Check if we already processed this document in this session
+            existing_images = StateManager.get_document_unified_images(temp_doc_id)
+            if existing_images:
+                Logger.info(f"Using already processed images for {temp_doc_id}")
+                doc_id = temp_doc_id
+            else:
+                # Process images from the downloaded PDF data
+                with st.spinner("Processing document images..."):
+                    RAGFlowDocumentManager._process_ragflow_document_images(pdf_data, doc_name, temp_doc_id)
+                
+                # Use the temporary doc_id
+                doc_id = temp_doc_id
+                Logger.info(f"Successfully processed images on-demand for RAGFlow document: {doc_id}")
+            
+        except Exception as e:
+            Logger.error(f"Failed to process images on-demand: {e}")
+            st.error(f"Could not process document images: {str(e)}")
+            return
+    
+    # Get unified images directly from session state (already extracted by pymupdf4llm)
+    unified_images = StateManager.get_document_unified_images(doc_id)
+    
+    # Debug log unified images
+    Logger.info(f"Got {len(unified_images) if unified_images else 0} unified images for RAGFlow document {doc_name} (doc_id: {doc_id})")
+    if unified_images:
+        for i, img in enumerate(unified_images[:3]):  # Log first 3 images for debugging
+            Logger.info(f"Image {i+1} info: path={img.get('file_path', 'None')}, page={img.get('page', 'None')}, caption='{img.get('caption', 'None')}'")
+    
+    # Use already-extracted images instead of re-extracting
     try:
-        with st.spinner("Extracting images from document..."):
-            images = _extract_images_from_pdf(pdf_data, doc_name)
+        images = []
+        if unified_images:
+            for img_info in unified_images:
+                img_path = img_info.get('file_path') or img_info.get('path')
+                if img_path and os.path.exists(img_path):
+                    try:
+                        with open(img_path, 'rb') as f:
+                            img_data = f.read()
+                        images.append({
+                            'image_data': img_data,
+                            'page': img_info.get('page', 'Unknown'),
+                            'index': img_info.get('index', 0),
+                            'format': 'png',
+                            'caption': img_info.get('caption', '')
+                        })
+                    except Exception as e:
+                        Logger.warning(f"Could not read image file {img_path}: {e}")
         
         if images:
             st.subheader(f"Images from {doc_name}")
@@ -543,7 +631,15 @@ def display_ragflow_document_images(ragflow_doc: dict, container_height: int | N
                         with cols[i % num_cols]:
                             try:
                                 img_index = img_info.get('index', i)
-                                caption = f"Image {img_index + 1}"
+                                extracted_caption = img_info.get('caption', '')
+                                
+                                # Use extracted caption if available, otherwise use default
+                                if extracted_caption:
+                                    # Keep the original caption intact (e.g., "Figure 8: Nearest neighbors...")
+                                    caption = extracted_caption
+                                else:
+                                    # Fallback to generic caption if no caption was extracted
+                                    caption = f"Image {img_index + 1}"
                                 
                                 st.image(img_info['image_data'], caption=caption, width=300)
                                 
@@ -562,61 +658,94 @@ def display_ragflow_document_images(ragflow_doc: dict, container_height: int | N
         st.error(f"Error extracting images: {str(e)}")
 
 
-def _extract_images_from_pdf(pdf_data: bytes, doc_name: str) -> list:
-    """Extract images from PDF using PyMuPDF."""
-    images = []
+# This function has been removed as it was redundant.
+# Images are already extracted during document processing using pymupdf4llm
+# and stored in session state via StateManager.store_document_unified_images()
+
+
+def _extract_image_caption_from_text(page_text: str, img_index: int, page_num: int) -> str:
+    """Extract caption for an image from page text using heuristics."""
+    import re
     
     try:
-        # Open PDF from bytes
-        doc = fitz.open(stream=pdf_data, filetype="pdf")
+        # Split text into lines
+        lines = page_text.splitlines()
         
-        for page_num in range(len(doc)):
-            page = doc[page_num]
-            
-            # Get images from the page
-            image_list = page.get_images()
-            
-            for img_index, img in enumerate(image_list):
-                try:
-                    # Get image data
-                    xref = img[0]
-                    pix = fitz.Pixmap(doc, xref)
-                    
-                    # Convert to PNG if not already
-                    if pix.n - pix.alpha < 4:  # GRAY or RGB
-                        img_data = pix.tobytes("png")
-                        
-                        images.append({
-                            'image_data': img_data,
-                            'page': page_num + 1,  # 1-based page numbering
-                            'index': img_index,
-                            'format': 'png'
-                        })
-                    else:  # CMYK: convert to RGB first
-                        pix1 = fitz.Pixmap(fitz.csRGB, pix)
-                        img_data = pix1.tobytes("png")
-                        
-                        images.append({
-                            'image_data': img_data,
-                            'page': page_num + 1,  # 1-based page numbering
-                            'index': img_index,
-                            'format': 'png'
-                        })
-                        pix1 = None
-                    
-                    pix = None
-                    
-                except Exception as e:
-                    Logger.warning(f"Could not extract image {img_index} from page {page_num + 1}: {e}")
-                    continue
+        # Look for common caption patterns (more comprehensive)
+        caption_patterns = [
+            r'^(Figure|Fig\.|Table|Diagram|Chart|Image|Photo)\s*\d+[:\.]?\s*(.+)',  # Figure 8: caption
+            r'^(Figure|Fig\.|Table|Diagram|Chart|Image|Photo)\s*\d+\s+(.+)',       # Figure 8 caption
+            r'^(Figure|Fig\.|Table|Diagram|Chart|Image|Photo)\s+\d+[:\.]?\s*(.+)', # Figure 8: caption
+            r'^(Figure|Fig\.|Table|Diagram|Chart|Image|Photo)[:\.]?\s*(.+)',       # Figure: caption
+        ]
         
-        doc.close()
-        Logger.info(f"Extracted {len(images)} images from {doc_name}")
+        caption_lines = []
+        max_caption_length = 300
+        
+        for i, line in enumerate(lines):
+            line = line.strip()
+            if not line:
+                continue
+                
+            # Check if line matches caption patterns
+            for pattern in caption_patterns:
+                match = re.match(pattern, line, re.IGNORECASE)
+                if match:
+                    # Found a caption start - include the full match (e.g., "Figure 8: caption text")
+                    if len(match.groups()) >= 2:
+                        # Reconstruct the full caption with figure number
+                        figure_part = match.group(1)  # "Figure", "Fig.", etc.
+                        caption_text = match.group(2)  # The actual caption text
+                        # Extract figure number from the original line
+                        figure_match = re.search(r'(\d+)', line)
+                        if figure_match:
+                            figure_num = figure_match.group(1)
+                            full_caption = f"{figure_part} {figure_num}: {caption_text}"
+                        else:
+                            full_caption = f"{figure_part}: {caption_text}"
+                        caption_lines.append(full_caption)
+                    else:
+                        caption_lines.append(match.group(1))
+                    
+                    # Look for continuation lines
+                    for j in range(i + 1, min(i + 5, len(lines))):  # Check next few lines
+                        next_line = lines[j].strip()
+                        if not next_line:
+                            continue
+                        # Stop if we hit another section or caption
+                        if re.match(r'^(Figure|Fig\.|Table|Diagram|Chart|Image|Photo|#|##|\s*INTRODUCTION|ABSTRACT|REFERENCES)', next_line, re.IGNORECASE):
+                            break
+                        # Add continuation if it looks like part of caption
+                        if len(next_line) < 200 and not re.match(r'^\d{1,4}$', next_line):
+                            caption_lines.append(next_line)
+                        else:
+                            break
+                    
+                    # Join and clean up caption
+                    caption = ' '.join(caption_lines).strip()
+                    if len(caption) > max_caption_length:
+                        caption = caption[:max_caption_length] + "..."
+                    
+                    if caption:
+                        Logger.info(f"Extracted caption for image {img_index} on page {page_num}: '{caption[:100]}...'")
+                        return caption
+                    break
+        
+        # If no specific caption pattern found, look for text near common figure references
+        for line in lines:
+            line = line.strip()
+            if re.search(r'\b(see\s+)?(figure|fig|image|diagram|chart)\b', line, re.IGNORECASE):
+                # This might be a reference to a figure, use it as a simple caption
+                if len(line) < 200:
+                    Logger.info(f"Found figure reference for image {img_index} on page {page_num}: '{line[:100]}...'")
+                    return line
+        
+        Logger.info(f"No caption found for image {img_index} on page {page_num}")
+        return ""
         
     except Exception as e:
-        Logger.error(f"Error processing PDF for image extraction: {e}")
-    
-    return images
+        Logger.warning(f"Error extracting caption for image {img_index} on page {page_num}: {e}")
+        return ""
 
 
 def _get_ragflow_document_details(ragflow_doc: dict) -> dict:
