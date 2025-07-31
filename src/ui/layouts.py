@@ -11,7 +11,7 @@ from streamlit_dimensions import st_dimensions
 from ..utils.logger import Logger
 from ..utils.source import format_source_for_display, get_source_page_numbers_for_display, format_page_numbers_for_display, get_source_annotation_snippets
 from ..utils.i18n import I18n
-from ..utils.ragflow_common import get_available_ragflow_assistants, set_selected_ragflow_assistant, get_assistant_documents, get_assistant_dataset_names
+from ..utils.ragflow_common import get_available_ragflow_assistants, set_selected_ragflow_assistant, get_assistant_documents, get_assistant_dataset_names, generate_ragflow_query_suggestions
 from .components import (
     display_document_info, display_document_images, display_ragflow_document_info, display_ragflow_document_images,
 )
@@ -21,7 +21,7 @@ def render_sidebar() -> None:
     """Render the sidebar with chat assistant selection and knowledge base documents."""
     with st.sidebar:
         # Chat Assistant selection
-        st.header("Chat Assistant")
+        st.header(I18n.t('chat_assistant'))
         try:
             available_assistants = get_available_ragflow_assistants()
             if available_assistants:
@@ -35,11 +35,11 @@ def render_sidebar() -> None:
                     current_index = assistant_ids.index(current_selection)
                 
                 selected_name = st.selectbox(
-                    "Select Chat Assistant",
+                    I18n.t('select_chat_assistant'),
                     assistant_names,
                     index=current_index,
                     key='ragflow_assistant_selector',
-                    help="Choose from your configured RAGFlow chat assistants"
+                    help=I18n.t('chat_assistant_help')
                 )
                 
                 # Store the actual assistant ID
@@ -49,7 +49,7 @@ def render_sidebar() -> None:
                     set_selected_ragflow_assistant(selected_assistant_id)
                     
                     # Show assistant's knowledge base documents
-                    st.subheader("Knowledge Base Documents")
+                    st.subheader(I18n.t('knowledge_base_documents'))
                     
                     # Get documents from assistant's datasets
                     assistant_documents = get_assistant_documents()
@@ -62,7 +62,7 @@ def render_sidebar() -> None:
                         container_height = min(sidebar_max_height, 60 * len(assistant_documents))
                         
                         doc_list_container = st.container(height=container_height)
-                        st.caption(f"{len(assistant_documents)} documents available")
+                        st.caption(I18n.t('documents_available', count=len(assistant_documents)))
                         
                         with doc_list_container:
                             for doc in assistant_documents:
@@ -86,6 +86,13 @@ def render_sidebar() -> None:
                                              help=f"From {dataset_name}"):
                                     st.session_state.current_file = doc_name
                                     st.session_state.current_ragflow_doc = doc
+                                    
+                                    # Generate query suggestions for the selected document (same as LlamaIndex version)
+                                    try:
+                                        generate_ragflow_query_suggestions(doc)
+                                    except Exception as e:
+                                        Logger.error(f"Error generating query suggestions: {str(e)}")
+                                    
                                     st.rerun()
                                 
                                 # Show dataset info
@@ -93,12 +100,12 @@ def render_sidebar() -> None:
                                 
                                 st.divider()
                     else:
-                        st.info("No documents found in this assistant's knowledge base.")
+                        st.info(I18n.t('no_documents_in_kb'))
             else:
-                st.warning("⚠️ No chat assistants available. Please create chat assistants in your RAGFlow instance.")
+                st.warning(I18n.t('no_chat_assistants'))
         except Exception as e:
-            st.error(f"❌ Error loading chat assistants: {str(e)}")
-            st.info("Please check your RAGFlow connection and configuration.")
+            st.error(I18n.t('error_loading_assistants', error=str(e)))
+            st.info(I18n.t('check_ragflow_connection'))
         
         # Settings section
         st.header(I18n.t('settings'))
@@ -115,18 +122,18 @@ def render_main_content() -> None:
     current_file = st.session_state.get('current_file')
     
     if not selected_assistant:
-        st.info("👋 Please select a chat assistant from the sidebar to start chatting with documents.")
+        st.info(I18n.t('select_assistant_to_start'))
         return
     
     if not current_file:
-        st.info("📄 Please select a document from the assistant's knowledge base to start chatting.")
+        st.info(I18n.t('select_document_to_start'))
         return
     
     # Get current RAGFlow document info
     current_ragflow_doc = st.session_state.get('current_ragflow_doc', {})
     
     # Display document information
-    st.subheader(f"💬 Chatting with: {current_file}")
+    st.subheader(I18n.t('chatting_with', filename=current_file))
     
     # Split the display into two columns - one for PDF and one for content tabs
     pdf_column, content_column = st.columns([50, 50], gap="medium")
@@ -143,7 +150,7 @@ def render_main_content() -> None:
         elif current_ragflow_doc:
             # Download PDF from RAGFlow
             try:
-                with st.spinner("Loading PDF from RAGFlow..."):
+                with st.spinner(I18n.t('loading_pdf_from_ragflow')):
                     from ..ragflow_client import create_client
                     client = create_client()
                     
@@ -158,11 +165,11 @@ def render_main_content() -> None:
                             st.session_state[pdf_cache_key] = pdf_data
                             Logger.info(f"Successfully downloaded PDF for {current_file}")
                         else:
-                            st.error(f"Failed to download PDF: {response.status_code}")
+                            st.error(I18n.t('failed_download_pdf', status_code=response.status_code))
                     else:
-                        st.error("Document ID or Dataset ID not available")
+                        st.error(I18n.t('document_dataset_id_not_available'))
             except Exception as e:
-                st.error(f"Error downloading PDF: {str(e)}")
+                st.error(I18n.t('error_downloading_pdf', error=str(e)))
         
         if pdf_data:
             # Get annotations for this document's chat history
@@ -208,7 +215,7 @@ def render_main_content() -> None:
                 on_annotation_click=annotation_click_handler
             )
         else:
-            st.info("📄 PDF will be loaded when available from RAGFlow")
+            st.info(I18n.t('pdf_loading'))
     
     # Create a scrollable container for the chat with dynamic height
     screen_height = streamlit_js_eval(js_expressions='screen.height', key='screen_height')
@@ -307,9 +314,9 @@ def render_main_content() -> None:
                                                         
                                                         if annotation_snippets and len(annotation_snippets) > 1:
                                                             # Display individual snippets for each annotation
-                                                            st.markdown("**Multiple text segments:**")
+                                                            st.markdown(f"**{I18n.t('multiple_text_segments')}:**")
                                                             for i, snippet in enumerate(annotation_snippets):
-                                                                st.markdown(f"**Segment {i+1}** (Page {snippet['page']}):")
+                                                                st.markdown(f"**{I18n.t('segment')} {i+1}** ({I18n.t('page', page=snippet['page'])}):")
                                                                 st.markdown(f"   _{snippet['text']}_")
                                                                 if i < len(annotation_snippets) - 1:
                                                                     st.markdown("")  # Add spacing between snippets
@@ -374,7 +381,7 @@ def render_main_content() -> None:
                     # Display suggestions as pills
                     try:
                         # Use the help parameter to show the full suggestion text on hover
-                        help_text = "Available suggestions:\n" + "\n".join([f"• {suggestion}" for suggestion in suggestions])
+                        help_text = I18n.t('available_suggestions') + ":\n" + "\n".join([f"• {suggestion}" for suggestion in suggestions])
                         
                         selected_suggestion = st.pills(
                             label=I18n.t('query_suggestions'),
@@ -411,12 +418,12 @@ def render_main_content() -> None:
             if current_ragflow_doc:
                 display_ragflow_document_info(current_ragflow_doc)
             else:
-                st.info("No document selected")
+                st.info(I18n.t('no_document_selected'))
         
         # Images tab
         with images_tab:
             if current_ragflow_doc:
                 display_ragflow_document_images(current_ragflow_doc, container_height=images_container_height)
             else:
-                st.info("No document selected")
+                st.info(I18n.t('no_document_selected'))
 

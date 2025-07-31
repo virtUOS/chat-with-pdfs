@@ -31,19 +31,25 @@ class RAGFlowChatEngine:
         Logger.info(f"Using selected RAGFlow chat assistant: {chat_id}")
     
     @staticmethod
-    def process_query(prompt: str, file_name: str) -> Dict[str, Any]:
+    def process_query(prompt: str, file_name: str, store_for_annotations: bool = True) -> Dict[str, Any]:
         """
         Process a query and return the response with sources and images using RAGFlow.
         
         Args:
             prompt: The user query
             file_name: The name of the file to query
+            store_for_annotations: Whether to store response in document_responses for annotations (default: True)
             
         Returns:
             Dictionary containing answer, sources, and images
         """
         try:
             Logger.info(f"Processing query for document {file_name} with RAGFlow: {prompt[:50]}...")
+            
+            # Add document context to scope the query to the specific document
+            # This helps RAGFlow focus on the intended document rather than searching the entire dataset
+            scoped_prompt = f"Please answer this question specifically about the document '{file_name}': {prompt}"
+            Logger.info(f"Scoped query: {scoped_prompt[:100]}...")
             
             # Initialize RAGFlow chat engine
             chat_engine = RAGFlowChatEngine()
@@ -56,6 +62,15 @@ class RAGFlowChatEngine:
             # Get or create session ID for this file
             session_key = f'ragflow_session_{file_name}'
             session_id = st.session_state.get(session_key)
+            
+            # Debug: Log session key information
+            Logger.info(f"User query using session key: {session_key}")
+            Logger.info(f"Current file_name parameter: {file_name}")
+            Logger.info(f"Current session state current_file: {st.session_state.get('current_file', 'NOT SET')}")
+            if session_id:
+                Logger.info(f"Found existing session ID: {session_id}")
+            else:
+                Logger.info(f"No existing session found for key: {session_key}")
             
             # If no session exists, create one first (like in the test script)
             if not session_id:
@@ -77,10 +92,10 @@ class RAGFlowChatEngine:
                 else:
                     Logger.error(f"Failed to initialize RAGFlow session: {init_response.get('message')}")
             
-            # Execute query with RAGFlow
+            # Execute query with RAGFlow using the scoped prompt
             response = chat_engine.client.chat_completion(
                 chat_id=chat_id,
-                question=prompt,
+                question=scoped_prompt,
                 stream=False,
                 session_id=session_id
             )
@@ -120,19 +135,20 @@ class RAGFlowChatEngine:
             for i, source in enumerate(sources):
                 citation_mapping[str(i)] = i  # Map citation number to source index (0-based for RAGFlow)
             
-            # Store response for future reference
-            if 'document_responses' not in st.session_state:
-                st.session_state['document_responses'] = {}
-            
-            st.session_state['document_responses'][file_name] = {
-                'last_query': prompt,
-                'last_response': answer,
-                'answer': answer,
-                'sources': sources,
-                'images': images,
-                'citation_mapping': citation_mapping,
-                'ragflow_reference': reference  # Store original RAGFlow reference
-            }
+            # Store response for future reference (only if store_for_annotations is True)
+            if store_for_annotations:
+                if 'document_responses' not in st.session_state:
+                    st.session_state['document_responses'] = {}
+                
+                st.session_state['document_responses'][file_name] = {
+                    'last_query': prompt,
+                    'last_response': answer,
+                    'answer': answer,
+                    'sources': sources,
+                    'images': images,
+                    'citation_mapping': citation_mapping,
+                    'ragflow_reference': reference  # Store original RAGFlow reference
+                }
             
             Logger.info(f"RAGFlow query completed successfully. Found {len(sources)} sources and {len(images)} images")
             
@@ -306,3 +322,4 @@ class RAGFlowChatEngine:
             st.session_state['chat_history'][file_name] = []
         
         Logger.info(f"Cleared chat history for file: {file_name}")
+    

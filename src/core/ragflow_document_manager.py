@@ -4,14 +4,17 @@ Handles document processing, storage, and retrieval using RAGFlow API.
 """
 
 import os
-import uuid
-import time
+import re
+import shutil
+import tempfile
+import fitz
 import streamlit as st
+
+import pymupdf4llm
 
 from ..config import IMAGES_PATH
 from ..utils.logger import Logger
 from ..utils.i18n import I18n
-from .file_processor import FileProcessor
 from .state_manager import StateManager
 from ..ragflow_client import create_client
 
@@ -67,204 +70,6 @@ class RAGFlowDocumentManager:
             Logger.error(f"Error ensuring default dataset: {str(e)}")
             raise
     
-    @staticmethod
-    def process_document(uploaded_file, set_as_current=True, multi_upload=False) -> bool:
-        """Process an uploaded document file using RAGFlow.
-        
-        Args:
-            uploaded_file: The file to process
-            set_as_current: If True, set this file as the current file
-            multi_upload: Whether this is part of a multi-file upload
-            
-        Returns:
-            bool: True if processing was successful, False otherwise
-        """
-        if not uploaded_file:
-            return False
-        
-        # Initialize file queue tracking if not exists
-        if 'file_queue' not in st.session_state:
-            st.session_state.file_queue = []
-        
-        # Record file upload interaction
-        file_name = uploaded_file.name
-        st.session_state.last_uploaded_file_name = file_name
-        st.session_state.last_upload_timestamp = str(int(time.time()))
-        
-        # Check if file is already processed
-        if file_name in StateManager.get_processed_files():
-            if set_as_current:
-                StateManager.set_current_file(file_name)
-            return True
-        
-        # Process new file
-        try:
-            Logger.info(f"Processing new document with RAGFlow: {file_name}")
-            
-            # Initialize RAGFlow document manager
-            ragflow_manager = RAGFlowDocumentManager()
-            
-            # Save uploaded file to temp location
-            pdf_path = RAGFlowDocumentManager._save_uploaded_file(uploaded_file)
-            
-            # Process the PDF with RAGFlow
-            doc_id = RAGFlowDocumentManager._process_pdf_with_ragflow(
-                ragflow_manager, pdf_path, file_name
-            )
-            
-            # Store data for reuse using StateManager
-            pdf_data = {
-                'path': pdf_path,
-                'ragflow_doc_id': doc_id,
-                'dataset_id': st.session_state.ragflow_dataset_id,
-                'invalid': False
-            }
-            StateManager.store_pdf_data(file_name, pdf_data)
-            
-            # Store binary data for reliable access
-            binary_data = FileProcessor.get_file_binary(pdf_path)
-            if binary_data:
-                StateManager.store_pdf_binary(file_name, binary_data)
-            
-            # Initialize chat history for this file
-            if file_name not in st.session_state.chat_history:
-                st.session_state.chat_history[file_name] = []
-            
-            # Store the name of the processed file
-            if "last_processed_files" not in st.session_state:
-                st.session_state["last_processed_files"] = []
-            st.session_state["last_processed_files"].append(file_name)
-            
-            # Set as current file if requested
-            if set_as_current or not StateManager.get_current_file():
-                StateManager.set_current_file(file_name)
-            
-            # Add file name to processed files set
-            st.session_state.processed_files.add(file_name)
-            
-            # Store the complete state before rerunning
-            st.session_state.file_processed = True
-            
-            # Update processing status
-            if file_name in st.session_state.get('file_processing_status', {}):
-                st.session_state.file_processing_status[file_name]['processing_time'] = (
-                    time.time() - st.session_state.file_processing_status[file_name].get('started_at', time.time())
-                )
-                st.session_state.file_processing_status[file_name]['status'] = 'completed'
-            
-            # For multi-uploads, store success
-            if multi_upload:
-                if 'multi_upload_results' not in st.session_state:
-                    st.session_state.multi_upload_results = {'success': [], 'failed': []}
-                st.session_state.multi_upload_results['success'].append(file_name)
-            
-            return True
-            
-        except Exception as e:
-            Logger.error(f"Error processing file {file_name}: {str(e)}")
-            
-            # Store error information
-            if "display_errors" not in st.session_state:
-                st.session_state["display_errors"] = {}
-            st.session_state["display_errors"][file_name] = str(e)
-            
-            # Update processing status
-            if file_name in st.session_state.get('file_processing_status', {}):
-                st.session_state.file_processing_status[file_name]['status'] = 'failed'
-                st.session_state.file_processing_status[file_name]['error'] = str(e)
-            
-            # For multi-uploads, track failures
-            if multi_upload:
-                if 'multi_upload_results' not in st.session_state:
-                    st.session_state.multi_upload_results = {'success': [], 'failed': []}
-                st.session_state.multi_upload_results['failed'].append({
-                    'name': file_name,
-                    'error': str(e)
-                })
-            
-            # Clean up the file if processing failed
-            if 'pdf_path' in locals() and os.path.exists(pdf_path):
-                os.remove(pdf_path)
-                
-            return False
-    
-    @staticmethod
-    def _save_uploaded_file(uploaded_file):
-        """Save an uploaded file to a temporary location.
-        
-        Args:
-            uploaded_file: The file to save
-            
-        Returns:
-            str: Path to the saved file
-        """
-        # Use the FileProcessor to save the uploaded file
-        return FileProcessor.save_uploaded_file(uploaded_file)
-    
-    @staticmethod
-    def _process_pdf_with_ragflow(ragflow_manager, pdf_path, pdf_name):
-        """Process a PDF file using RAGFlow.
-        
-        Args:
-            ragflow_manager: RAGFlowDocumentManager instance
-            pdf_path: Path to the PDF file
-            pdf_name: Name of the PDF file
-            
-        Returns:
-            str: Document ID from RAGFlow
-        """
-        # Generate a unique ID for this document
-        pdf_id = str(uuid.uuid4())
-        
-        # Update file to document ID mapping
-        st.session_state['file_document_id'][pdf_name] = pdf_id
-        
-        # Create image directory using FileProcessor
-        doc_image_path = FileProcessor.create_image_directory(IMAGES_PATH, pdf_id)
-        
-        # Extract documents with pymupdf4llm for OCR analysis
-        import pymupdf4llm
-        docs = pymupdf4llm.to_markdown(
-            doc=pdf_path,
-            write_images=True,
-            image_path=doc_image_path,
-            image_format="jpg",
-            dpi=200,
-            page_chunks=True,
-            extract_words=True
-        )
-
-        # Process the extracted content to handle images and store them in session state
-        # This is the missing piece that was in the LlamaIndex pipeline
-        RAGFlowDocumentManager._process_document_images(docs, pdf_id, pdf_path)
-
-        # RAGFlow handles OCR analysis internally, no need for custom OCR analysis
-        
-        # Upload document to RAGFlow
-        try:
-            upload_response = ragflow_manager.client.upload_document(
-                dataset_id=st.session_state.ragflow_dataset_id,
-                file_path=pdf_path
-            )
-            
-            if upload_response.get('code') == 0:
-                ragflow_doc_data = upload_response.get('data', {})
-                ragflow_doc_id = ragflow_doc_data.get('id')
-                
-                Logger.info(f"Successfully uploaded document to RAGFlow: {ragflow_doc_id}")
-                
-                # Store RAGFlow document ID mapping
-                if 'ragflow_document_mapping' not in st.session_state:
-                    st.session_state.ragflow_document_mapping = {}
-                st.session_state.ragflow_document_mapping[pdf_name] = ragflow_doc_id
-                
-                return ragflow_doc_id
-            else:
-                raise Exception(f"RAGFlow upload failed: {upload_response.get('message')}")
-                
-        except Exception as e:
-            Logger.error(f"Error uploading to RAGFlow: {str(e)}")
-            raise
     
     def get_dataset_id(self):
         """Get the current dataset ID."""
@@ -317,8 +122,6 @@ class RAGFlowDocumentManager:
             pdf_id: Document ID
             pdf_path: Path to the PDF file
         """
-        import re
-        import json
         
         Logger.debug(f"Processing images for document {pdf_id} with {len(docs)} pages.")
         
@@ -503,10 +306,7 @@ class RAGFlowDocumentManager:
             pdf_data: Binary PDF data
             doc_name: Name of the document
             doc_id: Document ID to use for storage
-        """
-        import tempfile
-        import pymupdf4llm
-        
+        """        
         Logger.info(f"Processing images on-demand for RAGFlow document: {doc_name}")
         
         try:
@@ -549,10 +349,6 @@ class RAGFlowDocumentManager:
         
         This replicates the flawless image and caption extraction from the original implementation.
         """
-        import re
-        import json
-        import os
-        import shutil
 
         Logger.debug(f"Process document {doc_id} with {len(docs)} pages using LlamaIndex logic.")
         
@@ -762,7 +558,6 @@ class RAGFlowDocumentManager:
         This is the EXACT same method as in LlamaIndex DocumentManager.
         """
         try:
-            import fitz
             
             # Open the PDF
             pdf_doc = fitz.open(pdf_path)
@@ -805,15 +600,12 @@ class RAGFlowDocumentManager:
             doc_id: Document ID
             temp_image_dir: Temporary directory containing extracted images
         """
-        import re
-        import shutil
         
         Logger.info(f"Processing images from temporary directory for document {doc_id}")
         
         # Create permanent image directory
-        from ..config import IMAGES_PATH
-        from .file_processor import FileProcessor
-        permanent_image_dir = FileProcessor.create_image_directory(IMAGES_PATH, doc_id)
+        permanent_image_dir = os.path.join(IMAGES_PATH, doc_id)
+        os.makedirs(permanent_image_dir, exist_ok=True)
         
         # Track image paths for this document
         image_paths = []
@@ -887,7 +679,6 @@ class RAGFlowDocumentManager:
         Returns:
             str: Extracted caption or empty string
         """
-        import re
         
         # Get text after image link
         after = text[image_match.end():]

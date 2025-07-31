@@ -19,7 +19,7 @@ from ..ragflow_client import create_client
 def display_ragflow_document_info(ragflow_doc: dict) -> None:
     """Display metadata information for the current RAGFlow document."""
     if not ragflow_doc:
-        st.warning("No document information available")
+        st.warning(I18n.t('no_document_info_available'))
         return
     
     # Get additional document details from RAGFlow API
@@ -30,8 +30,8 @@ def display_ragflow_document_info(ragflow_doc: dict) -> None:
     
     with col1:
         # Document name with icon
-        doc_name = ragflow_doc.get('name', 'Unknown Document')
-        st.markdown(f"**📋 Document Name**")
+        doc_name = ragflow_doc.get('name', I18n.t('unknown_document'))
+        st.markdown(f"**📋 {I18n.t('document_name')}**")
         st.markdown(f"   {doc_name}")
         st.markdown("")
         
@@ -45,28 +45,28 @@ def display_ragflow_document_info(ragflow_doc: dict) -> None:
                 size_str = f"{size / 1024:.1f} KB"
             else:
                 size_str = f"{size / (1024 * 1024):.1f} MB"
-            st.markdown(f"**📊 File Size**")
+            st.markdown(f"**📊 {I18n.t('file_size')}**")
             st.markdown(f"   {size_str}")
             st.markdown("")
         
         # Document type
-        doc_type = ragflow_doc.get('type', 'Unknown').upper()
-        st.markdown(f"**📎 Document Type**")
+        doc_type = ragflow_doc.get('type', I18n.t('unknown')).upper()
+        st.markdown(f"**📎 {I18n.t('document_type')}**")
         st.markdown(f"   {doc_type}")
         st.markdown("")
     
     with col2:
         # Dataset information - only show ID, not the redundant name
-        dataset_id = ragflow_doc.get('dataset_id', 'Unknown')
-        st.markdown(f"**🗂️ Dataset ID**")
+        dataset_id = ragflow_doc.get('dataset_id', I18n.t('unknown'))
+        st.markdown(f"**🗂️ {I18n.t('dataset_id')}**")
         st.markdown(f"   `{dataset_id}`")
         st.markdown("")
         
         # Chunk count - get from detailed info if available
         chunk_count = doc_details.get('chunk_num', ragflow_doc.get('chunk_num', 0))
         if chunk_count > 0:
-            st.markdown(f"**🧩 Text Chunks**")
-            st.markdown(f"   {chunk_count} chunks")
+            st.markdown(f"**🧩 {I18n.t('text_chunks')}**")
+            st.markdown(f"   {chunk_count} {I18n.t('chunks')}")
             st.markdown("")
         
         # Page count - try multiple sources
@@ -77,8 +77,8 @@ def display_ragflow_document_info(ragflow_doc: dict) -> None:
             page_count = _get_page_count_from_cached_pdf(ragflow_doc)
         
         if page_count:
-            st.markdown(f"**📖 Pages**")
-            st.markdown(f"   {page_count} pages")
+            st.markdown(f"**📖 {I18n.t('pages')}**")
+            st.markdown(f"   {page_count} {I18n.t('pages_count')}")
             st.markdown("")
     
     # Creation and update dates in a single row
@@ -86,7 +86,7 @@ def display_ragflow_document_info(ragflow_doc: dict) -> None:
     update_date = ragflow_doc.get('update_date')
     
     if created_date or update_date:
-        st.markdown("**📅 Timestamps**")
+        st.markdown(f"**📅 {I18n.t('timestamps')}**")
         date_col1, date_col2 = st.columns(2)
         
         if created_date:
@@ -95,21 +95,21 @@ def display_ragflow_document_info(ragflow_doc: dict) -> None:
                 # Parse the date and format it nicely
                 dt = datetime.strptime(created_date, "%a, %d %b %Y %H:%M:%S %Z")
                 formatted_date = dt.strftime("%B %d, %Y at %H:%M")
-                date_col1.caption(f"Created: {formatted_date}")
+                date_col1.caption(f"{I18n.t('created')}: {formatted_date}")
             except:
-                date_col1.caption(f"Created: {created_date}")
+                date_col1.caption(f"{I18n.t('created')}: {created_date}")
         
         if update_date:
             try:
                 dt = datetime.strptime(update_date, "%a, %d %b %Y %H:%M:%S %Z")
                 formatted_date = dt.strftime("%B %d, %Y at %H:%M")
-                date_col2.caption(f"Updated: {formatted_date}")
+                date_col2.caption(f"{I18n.t('updated')}: {formatted_date}")
             except:
-                date_col2.caption(f"Updated: {update_date}")
+                date_col2.caption(f"{I18n.t('updated')}: {update_date}")
     
     # Document summary section
     st.markdown("---")
-    st.markdown("**📝 Document Summary**")
+    st.markdown(f"**📝 {I18n.t('document_summary')}**")
     
     # Try to get or generate a summary
     summary_data = _get_or_generate_document_summary(ragflow_doc)
@@ -133,7 +133,7 @@ def display_ragflow_document_info(ragflow_doc: dict) -> None:
             citations = extract_citation_indices(summary_text)
             
             if citations:
-                with st.expander("📚 Show Sources"):
+                with st.expander(f"📚 {I18n.t('show_sources')}"):
                     displayed_sources = set()
                     
                     for citation_num in sorted(citations):
@@ -153,19 +153,19 @@ def display_ragflow_document_info(ragflow_doc: dict) -> None:
                                     page_numbers = get_source_page_numbers_for_display(source)
                                     page_display = format_page_numbers_for_display(page_numbers)
                                 except Exception:
-                                    page_display = 'Error'
+                                    page_display = I18n.t('error')
                                 
                                 # Get document name and similarity for nice display
                                 if isinstance(source, dict):
-                                    doc_name = source.get('metadata', {}).get('document_name', 'Unknown Document')
+                                    doc_name = source.get('metadata', {}).get('document_name', I18n.t('unknown_document'))
                                     similarity = source.get('metadata', {}).get('similarity', 0.0)
                                 else:
-                                    doc_name = 'Unknown Document'
+                                    doc_name = I18n.t('unknown_document')
                                     similarity = 0.0
                                 
                                 # Display in a nice format like the test script
-                                st.markdown(f"**{citation_num}. {doc_name}** (similarity: {similarity:.3f})")
-                                if page_display not in ['N/A', 'Error']:
+                                st.markdown(f"**{citation_num}. {doc_name}** ({I18n.t('similarity')}: {similarity:.3f})")
+                                if page_display not in ['N/A', I18n.t('error')]:
                                     st.caption(f"📄 {page_display}")
                                 
                                 # Check if we have multiple annotation snippets
@@ -173,9 +173,9 @@ def display_ragflow_document_info(ragflow_doc: dict) -> None:
                                 
                                 if annotation_snippets and len(annotation_snippets) > 1:
                                     # Display individual snippets for each annotation
-                                    st.markdown("**Multiple text segments:**")
+                                    st.markdown(f"**{I18n.t('multiple_text_segments')}:**")
                                     for i, snippet in enumerate(annotation_snippets):
-                                        st.markdown(f"**Segment {i+1}** (Page {snippet['page']}):")
+                                        st.markdown(f"**{I18n.t('segment')} {i+1}** ({I18n.t('page')} {snippet['page']}):")
                                         st.markdown(f"   _{snippet['text']}_")
                                         if i < len(annotation_snippets) - 1:
                                             st.markdown("")  # Add spacing between snippets
@@ -188,8 +188,8 @@ def display_ragflow_document_info(ragflow_doc: dict) -> None:
                                 displayed_sources.add(original_source_index)
     else:
         # Show a button to generate summary
-        if st.button("🤖 Generate Summary", key=f"generate_summary_{ragflow_doc.get('id')}"):
-            with st.spinner("Generating document summary..."):
+        if st.button(I18n.t('generate_summary'), key=f"generate_summary_{ragflow_doc.get('id')}"):
+            with st.spinner(I18n.t('generating_summary')):
                 summary_response = _generate_document_summary_with_assistant(ragflow_doc)
                 if summary_response:
                     # Store the summary for future use
@@ -198,7 +198,7 @@ def display_ragflow_document_info(ragflow_doc: dict) -> None:
                     st.session_state.ragflow_document_summaries[ragflow_doc.get('id')] = summary_response
                     st.rerun()
                 else:
-                    st.error("Failed to generate summary")
+                    st.error(I18n.t('failed_generate_summary'))
 
 
 def display_document_info(file_name: str) -> None:
@@ -493,7 +493,7 @@ def _get_page_count_from_cached_pdf(ragflow_doc: dict) -> int | None:
 def display_ragflow_document_images(ragflow_doc: dict, container_height: int | None = None) -> None:
     """Display images extracted from RAGFlow document using PyMuPDF."""
     if not ragflow_doc:
-        st.info("No document selected")
+        st.info(I18n.t('no_document_selected'))
         return
     
     doc_name = ragflow_doc.get('name', '')
@@ -501,7 +501,7 @@ def display_ragflow_document_images(ragflow_doc: dict, container_height: int | N
     
     # Check if we have cached PDF data
     if pdf_cache_key not in st.session_state:
-        st.info("📄 PDF not loaded yet. Please wait for the PDF to load in the viewer.")
+        st.info(I18n.t('pdf_not_loaded_yet'))
         return
     
     pdf_data = st.session_state[pdf_cache_key]
@@ -509,7 +509,7 @@ def display_ragflow_document_images(ragflow_doc: dict, container_height: int | N
     # Get the document ID from the ragflow document mapping
     ragflow_doc_id = ragflow_doc.get('id')
     if not ragflow_doc_id:
-        st.info("Document ID not available")
+        st.info(I18n.t('document_id_not_available'))
         return
     
     # Debug logging to understand the session state
@@ -557,7 +557,7 @@ def display_ragflow_document_images(ragflow_doc: dict, container_height: int | N
                 doc_id = temp_doc_id
             else:
                 # Process images from the downloaded PDF data
-                with st.spinner("Processing document images..."):
+                with st.spinner(I18n.t('processing_document_images')):
                     RAGFlowDocumentManager._process_ragflow_document_images(pdf_data, doc_name, temp_doc_id)
                 
                 # Use the temporary doc_id
@@ -566,7 +566,7 @@ def display_ragflow_document_images(ragflow_doc: dict, container_height: int | N
             
         except Exception as e:
             Logger.error(f"Failed to process images on-demand: {e}")
-            st.error(f"Could not process document images: {str(e)}")
+            st.error(I18n.t('could_not_process_document_images', error=str(e)))
             return
     
     # Get unified images directly from session state (already extracted by pymupdf4llm)
@@ -599,8 +599,8 @@ def display_ragflow_document_images(ragflow_doc: dict, container_height: int | N
                         Logger.warning(f"Could not read image file {img_path}: {e}")
         
         if images:
-            st.subheader(f"Images from {doc_name}")
-            st.caption(f"Found {len(images)} images")
+            st.subheader(I18n.t('images_from', filename=doc_name))
+            st.caption(I18n.t('found_images', count=len(images)))
             
             # Sort images by page number first, then by index within page
             sorted_images = sorted(images, key=lambda x: (x.get('page', 0), x.get('index', 0)))
@@ -621,7 +621,7 @@ def display_ragflow_document_images(ragflow_doc: dict, container_height: int | N
                     
                     # Page header
                     st.markdown(f"### 📄 Page {page_num}")
-                    st.markdown(f"*{len(page_images)} image(s) on this page*")
+                    st.markdown(f"*{I18n.t('images_on_page', count=len(page_images))}*")
                     
                     # Create columns for images on this page (max 3 per row)
                     num_cols = min(3, len(page_images))
@@ -639,23 +639,23 @@ def display_ragflow_document_images(ragflow_doc: dict, container_height: int | N
                                     caption = extracted_caption
                                 else:
                                     # Fallback to generic caption if no caption was extracted
-                                    caption = f"Image {img_index + 1}"
+                                    caption = I18n.t('image_number', number=img_index + 1)
                                 
                                 st.image(img_info['image_data'], caption=caption, width=300)
                                 
                             except Exception as e:
                                 Logger.error(f"Error displaying image {i} on page {page_num}: {e}")
-                                st.warning(f"Error displaying image {i+1}")
+                                st.warning(I18n.t('error_displaying_image_number', number=i+1))
                     
                     # Add separator between pages
                     if page_num != max(images_by_page.keys()):
                         st.markdown("---")
         else:
-            st.info("No images found in this document")
-            
+            st.info(I18n.t('no_images_found_in_document'))
+
     except Exception as e:
         Logger.error(f"Error extracting images: {e}")
-        st.error(f"Error extracting images: {str(e)}")
+        st.error(I18n.t('error_extracting_images', error=str(e)))
 
 
 # This function has been removed as it was redundant.
@@ -819,14 +819,20 @@ def _generate_document_summary_with_assistant(ragflow_doc: dict) -> dict | None:
         # Use the chat engine to ask for a summary
         summary_query = f"Please provide a brief summary of the document '{ragflow_doc.get('name', 'this document')}'. Include the main topics, key points, and purpose of the document in 2-3 sentences."
         
-        response = RAGFlowChatEngine.process_query(summary_query, ragflow_doc.get('name', ''))
+        # Use store_for_annotations=False to prevent PDF annotations from summary generation
+        response = RAGFlowChatEngine.process_query(summary_query, ragflow_doc.get('name', ''), store_for_annotations=False)
         
         if response and response.get('answer'):
-            # Return the full response with sources and citation mapping
+            # Remove citations from summary text (same as query suggestions)
+            import re
+            summary_text = response['answer']
+            summary_text = re.sub(r'\s*\[ID:\d+\]', '', summary_text)
+            
+            # Return the cleaned summary without sources (no annotations needed)
             return {
-                'text': response['answer'],
-                'sources': response.get('sources', []),
-                'citation_mapping': response.get('citation_mapping', {})
+                'text': summary_text,
+                'sources': [],  # Don't include sources to prevent annotations
+                'citation_mapping': {}  # Don't include citation mapping
             }
         
     except Exception as e:

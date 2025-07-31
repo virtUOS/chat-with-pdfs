@@ -4,7 +4,7 @@ Provides language switching functionality and text translations.
 """
 
 import streamlit as st
-from typing import Dict, Any
+from typing import Dict
 from ..utils.logger import Logger
 
 
@@ -20,24 +20,29 @@ class I18n:
     # Translation dictionary
     TRANSLATIONS = {
         'en': {
-            # UI Layout - Sidebar
-            'document_upload': 'Document Upload',
-            'upload_pdf_documents': 'Upload PDF documents',
-            'your_documents': 'Your Documents',
+            # UI Layout - Sidebar (RAGFlow version)
+            'chat_assistant': 'Chat Assistant',
+            'select_chat_assistant': 'Select Chat Assistant',
+            'chat_assistant_help': 'Choose from your configured RAGFlow chat assistants',
+            'knowledge_base_documents': 'Knowledge Base Documents',
             'documents_available': 'document{s} available',
-            'clear_all_files': '🗑️ Clear All Files',
-            'delete_all_documents': 'Delete all documents',
-            'remove_document': 'Remove {filename}',
-            'switch_to_document': 'Switch to {filename}',
+            'no_documents_in_kb': 'No documents found in this assistant\'s knowledge base.',
+            'no_chat_assistants': '⚠️ No chat assistants available. Please create chat assistants in your RAGFlow instance.',
+            'error_loading_assistants': '❌ Error loading chat assistants: {error}',
+            'check_ragflow_connection': 'Please check your RAGFlow connection and configuration.',
             'settings': 'Settings',
-            'select_model': 'Select Model',
             'language': 'Language',
             
-            # UI Layout - Main Content
-            'upload_pdf_to_start': '👈 Please upload a PDF document to start chatting',
-            'select_pdf_to_start': '👈 Select a PDF document to start chatting',
-            'chatting_with': "You're now chatting with: {filename} ({position}/{total})",
-            'pdf_data_not_available': 'PDF data not available. Please try re-uploading the document.',
+            # UI Layout - Main Content (RAGFlow version)
+            'select_assistant_to_start': '👋 Please select a chat assistant from the sidebar to start chatting with documents.',
+            'select_document_to_start': '📄 Please select a document from the assistant\'s knowledge base to start chatting.',
+            'chatting_with': '💬 Chatting with: {filename}',
+            'pdf_loading': '📄 PDF will be loaded when available from RAGFlow',
+            'pdf_not_loaded': '📄 PDF not loaded yet. Please wait for the PDF to load in the viewer.',
+            'document_id_not_available': 'Document ID not available',
+            'failed_download_pdf': 'Failed to download PDF: {status_code}',
+            'document_dataset_id_not_available': 'Document ID or Dataset ID not available',
+            'error_downloading_pdf': 'Error downloading PDF: {error}',
             'clear_chat': '🗑️ Clear Chat',
             'clear_chat_help': 'Clear chat history for this document',
             'show_sources': '📂 Show Sources',
@@ -45,6 +50,46 @@ class I18n:
             'type_question_here': 'Type your question here...',
             'query_suggestions': 'Query suggestions:',
             'citation_mapping_not_available': '⚠️ Citation mapping not available. Source information may be incomplete.',
+            
+            # RAGFlow Document Info
+            'no_document_info_available': 'No document information available',
+            'generate_summary': '🤖 Generate Summary',
+            'generating_summary': 'Generating document summary...',
+            'failed_generate_summary': 'Failed to generate summary',
+            'no_document_selected': 'No document selected',
+            'could_not_process_images': 'Could not process document images: {error}',
+            'images_from_document': 'Images from {doc_name}',
+            'found_images_count': 'Found {count} images',
+            'no_images_in_document': 'No images found in this document',
+            'error_extracting_images': 'Error extracting images: {error}',
+            'error_displaying_image_num': 'Error displaying image {num}',
+            'unknown_document': 'Unknown Document',
+            'document_name': 'Document Name',
+            'file_size': 'File Size',
+            'document_type': 'Document Type',
+            'unknown': 'Unknown',
+            'dataset_id': 'Dataset ID',
+            'text_chunks': 'Text Chunks',
+            'chunks': 'chunks',
+            'pages_count': 'pages',
+            'pages': 'Pages',
+            'timestamps': 'Timestamps',
+            'created': 'Created',
+            'updated': 'Updated',
+            'document_summary': 'Document Summary',
+            'show_sources': 'Show Sources',
+            'similarity': 'similarity',
+            'error': 'Error',
+            'multiple_text_segments': 'Multiple text segments',
+            'segment': 'Segment',
+            'processing_document_images': 'Processing document images...',
+            'images_on_page': '{count} image(s) on this page',
+            'image_number': 'Image {number}',
+            'error_displaying_image_number': 'Error displaying image {number}',
+            'no_images_found_in_document': 'No images found in this document',
+            'could_not_process_document_images': 'Could not process document images: {error}',
+            'loading_pdf_from_ragflow': 'Loading PDF from RAGFlow...',
+            'available_suggestions': 'Available suggestions',
             
             # Tabs
             'chat': 'Chat',
@@ -76,32 +121,6 @@ class I18n:
             'error_displaying_image': 'Error displaying image: {filename}',
             'image_file_not_found': 'Image file not found: {filename}',
             
-            # OCR Warnings
-            'document_analysis': '📄 Document Analysis',
-            'pages': 'Pages',
-            'avg_text_per_page': 'Avg Text/Page',
-            'avg_words_per_page': 'Avg Words/Page',
-            'scanned_ratio': 'Scanned Ratio',
-            'chars': 'chars',
-            'ocr_limitation': '⚠️ **OCR Limitation**: This document appears to be scanned or image-based. Text extraction may be incomplete.',
-            'good_text_content': '✅ **Good Text Content**: Document has sufficient extractable text.',
-            'analysis': 'Analysis: {details}',
-            'no_details_available': 'No details available',
-            
-            # OCR Warning Messages
-            'potential_ocr_limitation': '⚠️ **Potential OCR Limitation Detected**',
-            'pdf_appears_scanned': 'This PDF appears to be scanned or image-based ({minimal_pages}/{total_pages} pages with minimal text, avg {avg_text} characters per page).',
-            'cannot_read_images': '**This application cannot read text from images.** If your PDF contains:',
-            'scanned_documents': '• Scanned documents',
-            'images_with_text': '• Images with text',
-            'screenshots': '• Screenshots',
-            'handwritten_content': '• Handwritten content',
-            'missing_content_warning': 'You may be missing important content in your queries. Consider using an OCR tool to convert your PDF to searchable text first.',
-            'document_processing_complete': '📄 **Document Processing Complete**',
-            'pages_processed': '• **Pages processed:** {pages}',
-            'average_text_per_page': '• **Average text per page:** {avg_text} characters',
-            'average_words_per_page': '• **Average words per page:** {avg_words} words',
-            'sufficient_text_content': 'The document appears to have sufficient text content for effective querying.',
             
             # Source Display
             'source_citation': 'Source [{citation}] (Page {page}):',
@@ -113,31 +132,31 @@ class I18n:
             'error_occurred': 'An error occurred',
             'try_again': 'Please try again',
             
-            # Analysis Reasons
-            'most_pages_minimal_text': 'Most pages contain very little extractable text',
-            'low_average_text': 'Very low average text content per page',
-            'high_ratio_minimal_text': 'High ratio of pages with minimal text content',
-            'sufficient_text_detected': 'Sufficient text content detected',
         },
         'de': {
-            # UI Layout - Sidebar
-            'document_upload': 'Dokument hochladen',
-            'upload_pdf_documents': 'PDF-Dokumente hochladen',
-            'your_documents': 'Ihre Dokumente',
+            # UI Layout - Sidebar (RAGFlow version)
+            'chat_assistant': 'Chat-Assistent',
+            'select_chat_assistant': 'Chat-Assistent auswählen',
+            'chat_assistant_help': 'Wählen Sie aus Ihren konfigurierten RAGFlow Chat-Assistenten',
+            'knowledge_base_documents': 'Wissensbasis-Dokumente',
             'documents_available': 'Dokument{s} verfügbar',
-            'clear_all_files': '🗑️ Alle Dateien löschen',
-            'delete_all_documents': 'Alle Dokumente löschen',
-            'remove_document': '{filename} entfernen',
-            'switch_to_document': 'Zu {filename} wechseln',
+            'no_documents_in_kb': 'Keine Dokumente in der Wissensbasis dieses Assistenten gefunden.',
+            'no_chat_assistants': '⚠️ Keine Chat-Assistenten verfügbar. Bitte erstellen Sie Chat-Assistenten in Ihrer RAGFlow-Instanz.',
+            'error_loading_assistants': '❌ Fehler beim Laden der Chat-Assistenten: {error}',
+            'check_ragflow_connection': 'Bitte überprüfen Sie Ihre RAGFlow-Verbindung und -Konfiguration.',
             'settings': 'Einstellungen',
-            'select_model': 'Modell auswählen',
             'language': 'Sprache',
             
-            # UI Layout - Main Content
-            'upload_pdf_to_start': '👈 Bitte laden Sie ein PDF-Dokument hoch, um zu beginnen',
-            'select_pdf_to_start': '👈 Wählen Sie ein PDF-Dokument aus, um zu beginnen',
-            'chatting_with': "Sie chatten jetzt mit: {filename} ({position}/{total})",
-            'pdf_data_not_available': 'PDF-Daten nicht verfügbar. Bitte versuchen Sie, das Dokument erneut hochzuladen.',
+            # UI Layout - Main Content (RAGFlow version)
+            'select_assistant_to_start': '👋 Bitte wählen Sie einen Chat-Assistenten aus der Seitenleiste, um mit Dokumenten zu chatten.',
+            'select_document_to_start': '📄 Bitte wählen Sie ein Dokument aus der Wissensbasis des Assistenten, um zu chatten.',
+            'chatting_with': '💬 Chatten mit: {filename}',
+            'pdf_loading': '📄 PDF wird geladen, wenn es von RAGFlow verfügbar ist',
+            'pdf_not_loaded': '📄 PDF noch nicht geladen. Bitte warten Sie, bis das PDF im Viewer geladen wird.',
+            'document_id_not_available': 'Dokument-ID nicht verfügbar',
+            'failed_download_pdf': 'PDF-Download fehlgeschlagen: {status_code}',
+            'document_dataset_id_not_available': 'Dokument-ID oder Dataset-ID nicht verfügbar',
+            'error_downloading_pdf': 'Fehler beim Herunterladen der PDF: {error}',
             'clear_chat': '🗑️ Chat löschen',
             'clear_chat_help': 'Chat-Verlauf für dieses Dokument löschen',
             'show_sources': '📂 Quellen anzeigen',
@@ -145,6 +164,46 @@ class I18n:
             'type_question_here': 'Geben Sie hier Ihre Frage ein...',
             'query_suggestions': 'Fragevorschläge:',
             'citation_mapping_not_available': '⚠️ Zitat-Zuordnung nicht verfügbar. Quelleninformationen könnten unvollständig sein.',
+            
+            # RAGFlow Document Info
+            'no_document_info_available': 'Keine Dokumentinformationen verfügbar',
+            'generate_summary': '🤖 Zusammenfassung generieren',
+            'generating_summary': 'Dokumentzusammenfassung wird generiert...',
+            'failed_generate_summary': 'Zusammenfassung konnte nicht generiert werden',
+            'no_document_selected': 'Kein Dokument ausgewählt',
+            'could_not_process_images': 'Dokumentbilder konnten nicht verarbeitet werden: {error}',
+            'images_from_document': 'Bilder aus {doc_name}',
+            'found_images_count': '{count} Bilder gefunden',
+            'no_images_in_document': 'Keine Bilder in diesem Dokument gefunden',
+            'error_extracting_images': 'Fehler beim Extrahieren der Bilder: {error}',
+            'error_displaying_image_num': 'Fehler beim Anzeigen von Bild {num}',
+            'unknown_document': 'Unbekanntes Dokument',
+            'document_name': 'Dokumentname',
+            'file_size': 'Dateigröße',
+            'document_type': 'Dokumenttyp',
+            'unknown': 'Unbekannt',
+            'dataset_id': 'Dataset-ID',
+            'text_chunks': 'Text-Chunks',
+            'chunks': 'Chunks',
+            'pages_count': 'Seiten',
+            'pages': 'Seiten',
+            'timestamps': 'Zeitstempel',
+            'created': 'Erstellt',
+            'updated': 'Aktualisiert',
+            'document_summary': 'Dokumentzusammenfassung',
+            'show_sources': 'Quellen anzeigen',
+            'similarity': 'Ähnlichkeit',
+            'error': 'Fehler',
+            'multiple_text_segments': 'Mehrere Textsegmente',
+            'segment': 'Segment',
+            'processing_document_images': 'Dokumentbilder werden verarbeitet...',
+            'images_on_page': '{count} Bild(er) auf dieser Seite',
+            'image_number': 'Bild {number}',
+            'error_displaying_image_number': 'Fehler beim Anzeigen von Bild {number}',
+            'no_images_found_in_document': 'Keine Bilder in diesem Dokument gefunden',
+            'could_not_process_document_images': 'Dokumentbilder konnten nicht verarbeitet werden: {error}',
+            'loading_pdf_from_ragflow': 'PDF wird von RAGFlow geladen...',
+            'available_suggestions': 'Verfügbare Vorschläge',
             
             # Tabs
             'chat': 'Chat',
@@ -176,32 +235,6 @@ class I18n:
             'error_displaying_image': 'Fehler beim Anzeigen des Bildes: {filename}',
             'image_file_not_found': 'Bilddatei nicht gefunden: {filename}',
             
-            # OCR Warnings
-            'document_analysis': '📄 Dokument-Analyse',
-            'pages': 'Seiten',
-            'avg_text_per_page': 'Ø Text/Seite',
-            'avg_words_per_page': 'Ø Wörter/Seite',
-            'scanned_ratio': 'Scan-Verhältnis',
-            'chars': 'Zeichen',
-            'ocr_limitation': '⚠️ **OCR-Einschränkung**: Dieses Dokument scheint gescannt oder bildbasiert zu sein. Die Textextraktion könnte unvollständig sein.',
-            'good_text_content': '✅ **Guter Textinhalt**: Das Dokument hat ausreichend extrahierbaren Text.',
-            'analysis': 'Analyse: {details}',
-            'no_details_available': 'Keine Details verfügbar',
-            
-            # OCR Warning Messages
-            'potential_ocr_limitation': '⚠️ **Potenzielle OCR-Einschränkung erkannt**',
-            'pdf_appears_scanned': 'Diese PDF scheint gescannt oder bildbasiert zu sein ({minimal_pages}/{total_pages} Seiten mit minimalem Text, Ø {avg_text} Zeichen pro Seite).',
-            'cannot_read_images': '**Diese Anwendung kann keinen Text aus Bildern lesen.** Wenn Ihre PDF enthält:',
-            'scanned_documents': '• Gescannte Dokumente',
-            'images_with_text': '• Bilder mit Text',
-            'screenshots': '• Screenshots',
-            'handwritten_content': '• Handgeschriebene Inhalte',
-            'missing_content_warning': 'Möglicherweise fehlen wichtige Inhalte in Ihren Anfragen. Erwägen Sie die Verwendung eines OCR-Tools, um Ihre PDF zuerst in durchsuchbaren Text zu konvertieren.',
-            'document_processing_complete': '📄 **Dokumentverarbeitung abgeschlossen**',
-            'pages_processed': '• **Verarbeitete Seiten:** {pages}',
-            'average_text_per_page': '• **Durchschnittlicher Text pro Seite:** {avg_text} Zeichen',
-            'average_words_per_page': '• **Durchschnittliche Wörter pro Seite:** {avg_words} Wörter',
-            'sufficient_text_content': 'Das Dokument scheint ausreichend Textinhalt für effektive Abfragen zu haben.',
             
             # Source Display
             'source_citation': 'Quelle [{citation}] (Seite {page}):',
@@ -213,11 +246,6 @@ class I18n:
             'error_occurred': 'Ein Fehler ist aufgetreten',
             'try_again': 'Bitte versuchen Sie es erneut',
             
-            # Analysis Reasons
-            'most_pages_minimal_text': 'Die meisten Seiten enthalten sehr wenig extrahierbaren Text',
-            'low_average_text': 'Sehr geringer durchschnittlicher Textinhalt pro Seite',
-            'high_ratio_minimal_text': 'Hoher Anteil von Seiten mit minimalem Textinhalt',
-            'sufficient_text_detected': 'Ausreichender Textinhalt erkannt',
         }
     }
     
@@ -317,30 +345,5 @@ class I18n:
             selected_code = language_codes[display_names.index(selected_display)]
             if selected_code != current_lang:
                 I18n.set_language(selected_code)
-                # Translate existing document content if needed
-                I18n._translate_all_documents(selected_code)
                 st.rerun()
     
-    @staticmethod
-    def _translate_all_documents(target_language: str) -> None:
-        """
-        Translate all loaded documents' summaries and query suggestions to the target language.
-        
-        Args:
-            target_language: Target language code
-        """
-        try:
-            # Import here to avoid circular imports
-            from ..core.document_manager import DocumentManager
-            from ..core.state_manager import StateManager
-            
-            # Get all loaded documents
-            if 'pdf_data' in st.session_state:
-                for filename, pdf_info in st.session_state.pdf_data.items():
-                    if isinstance(pdf_info, dict) and 'doc_id' in pdf_info:
-                        pdf_id = pdf_info['doc_id']
-                        Logger.info(f"Translating content for document {filename} (ID: {pdf_id})")
-                        DocumentManager.translate_document_content_if_needed(pdf_id, target_language)
-                        
-        except Exception as e:
-            Logger.error(f"Error translating documents to {target_language}: {e}")

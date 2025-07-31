@@ -3,75 +3,10 @@ Event handlers for the Chat with Docs application UI.
 """
 
 import streamlit as st
-import time
 
 from ..utils.logger import Logger
-from ..utils.ragflow_common import initialize_ragflow_settings
 from ..utils.source import extract_citation_indices
-from ..core.ragflow_document_manager import RAGFlowDocumentManager
 from ..core.ragflow_chat_engine import RAGFlowChatEngine
-
-
-def handle_file_upload(uploaded_files) -> None:
-    """Handle file upload event.
-    
-    Args:
-        uploaded_files: File or list of files from the file uploader
-    """
-    # Reset error display dictionary
-    st.session_state["display_errors"] = {}
-    
-    # Initialize or update file queue status
-    if 'file_processing_status' not in st.session_state:
-        st.session_state.file_processing_status = {}
-    
-    # Ensure we have a list of files even if only one file was uploaded
-    if not isinstance(uploaded_files, list):
-        uploaded_files = [uploaded_files]
-    
-    # Track if we had a current file before processing
-    had_current_file = 'current_file' in st.session_state and st.session_state.current_file
-    
-    # Add a progress indicator for multiple file uploads
-    if len(uploaded_files) > 1:
-        st.session_state.multi_upload_progress = {
-            'total': len(uploaded_files),
-            'processed': 0,
-            'started_at': time.time()
-        }
-    
-    # Process each uploaded file
-    for i, uploaded_file in enumerate(uploaded_files):
-        # Update processing status
-        st.session_state.file_processing_status[uploaded_file.name] = {
-            'status': 'processing',
-            'started_at': time.time(),
-            'index': i,
-            'total': len(uploaded_files)
-        }
-        
-        # Set as current only if:
-        # - It's the only file being uploaded and we didn't have a current file
-        # - It's the last file in a multi-file upload and we didn't have a current file
-        set_as_current = (not had_current_file and
-                         (len(uploaded_files) == 1 or i == len(uploaded_files) - 1))
-        
-        # Process the file with multi-upload information
-        RAGFlowDocumentManager.process_document(
-            uploaded_file,
-            set_as_current=set_as_current,
-            multi_upload=(len(uploaded_files) > 1)
-        )
-        
-        # Update progress for multi-upload
-        if len(uploaded_files) > 1 and 'multi_upload_progress' in st.session_state:
-            st.session_state.multi_upload_progress['processed'] += 1
-    
-    # Increment interaction ID to force UI refresh
-    st.session_state.interaction_id = st.session_state.get('interaction_id', 0) + 1
-    
-    # Force a full page rerun to reflect changes
-    st.rerun()
 
 
 def handle_query_submission(query_text: str, current_file: str, chat_container) -> None:
@@ -161,19 +96,3 @@ def handle_query_submission(query_text: str, current_file: str, chat_container) 
                 })
 
 
-def handle_settings_change() -> None:
-    """Handle settings changes for model selection."""
-    # Get the selected display name from session state
-    selected_display_name = st.session_state.get('selected_display_name')
-    model_display_map = st.session_state.get('model_display_map', {})
-    if not selected_display_name or selected_display_name not in model_display_map:
-        return
-    model_name = model_display_map[selected_display_name]
-    # Update model if changed
-    if model_name != st.session_state.get('model_name'):
-        st.session_state.model_name = model_name
-        # Re-initialize RAGFlow settings
-        initialize_ragflow_settings()
-        Logger.info(f"Model changed to: {model_name}. Will use this model for future queries.")
-        # Note: We don't need to recreate query engines since the LLM will be
-        # updated in the response synthesizer before each query execution

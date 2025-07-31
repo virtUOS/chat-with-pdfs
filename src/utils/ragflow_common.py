@@ -5,9 +5,17 @@ RAGFlow-compatible common utility functions for the Chat with Docs application.
 import os
 import time
 import uuid
+import ast
+import re
 import streamlit as st
 
 from ..utils.logger import Logger
+from ..utils.prompts import PromptTemplates
+
+from ..ragflow_client import create_client
+
+from ..core.ragflow_chat_engine import RAGFlowChatEngine
+from ..core.state_manager import StateManager
 
 def generate_unique_component_key(prefix, component_type, identifier, context=None):
     """
@@ -124,7 +132,6 @@ def get_available_ragflow_assistants():
         list: List of available chat assistant dictionaries from RAGFlow
     """
     try:
-        from ..ragflow_client import create_client
         client = create_client()
         response = client.get_chat_assistants()
         
@@ -168,7 +175,6 @@ def get_assistant_documents():
         list: List of documents from all datasets associated with the selected assistant
     """
     try:
-        from ..ragflow_client import create_client
         
         # Get selected assistant
         assistant_id = st.session_state.get('selected_ragflow_assistant')
@@ -239,7 +245,6 @@ def get_assistant_dataset_names():
         dict: Mapping of dataset_id to dataset_name
     """
     try:
-        from ..ragflow_client import create_client
         
         # Get selected assistant
         assistant_id = st.session_state.get('selected_ragflow_assistant')
@@ -303,6 +308,250 @@ def validate_ragflow_environment():
     return True
 
 
+def generate_ragflow_query_suggestions(ragflow_doc: dict) -> None:
+    """
+    Generate query suggestions for a RAGFlow document using the same approach as LlamaIndex version.
+    
+    Args:
+        ragflow_doc: RAGFlow document dictionary containing id, dataset_id, etc.
+    """
+    try:
+        
+        doc_id = ragflow_doc.get('id')
+        dataset_id = ragflow_doc.get('dataset_id')
+        
+        if not doc_id or not dataset_id:
+            Logger.warning("Missing document ID or dataset ID for query suggestion generation")
+            return
+        
+        # Check if suggestions already exist for this document
+        if doc_id in st.session_state.get('document_query_suggestions', {}):
+            Logger.info(f"Query suggestions already exist for document {doc_id}")
+            return
+        
+        Logger.info(f"Generating query suggestions for RAGFlow document {doc_id}...")
+        
+        client = create_client()
+        
+        # Get document chunks directly from RAGFlow API (more reliable than retrieve)
+        try:
+            # Get document chunks directly to ensure we have the actual content
+            chunks_response = client._make_request('GET', f'/api/v1/datasets/{dataset_id}/documents/{doc_id}/chunks')
+            
+            if chunks_response.status_code != 200:
+                Logger.error(f"Failed to get document chunks for suggestions: {chunks_response.status_code}")
+                _store_fallback_suggestions(doc_id)
+                return
+            
+            chunks_data = chunks_response.json()
+            if chunks_data.get('code') != 0:
+                Logger.error(f"Failed to get document chunks: {chunks_data.get('message')}")
+                _store_fallback_suggestions(doc_id)
+                return
+            
+            chunks = chunks_data.get('data', {}).get('chunks', [])
+            if not chunks:
+                Logger.warning(f"No chunks found for document {doc_id}")
+                _store_fallback_suggestions(doc_id)
+                return
+            
+            # Extract content from chunks (same as LlamaIndex approach)
+            sample_chunks = chunks[:min(5, len(chunks))]  # Use first 5 chunks
+            document_content = "\n\n".join([
+                chunk.get('content_with_weight', '') or chunk.get('content', '')
+                for chunk in sample_chunks
+            ])
+            
+            # Limit content length (same as LlamaIndex: 5000 chars)
+            max_chars = 5000
+            if len(document_content) > max_chars:
+                document_content = document_content[:max_chars] + "..."
+            
+            if not document_content.strip():
+                Logger.warning(f"No text content found in document chunks for {doc_id}")
+                _store_fallback_suggestions(doc_id)
+                return
+            
+            # Debug: Log the content being used
+            Logger.info(f"Using document content for suggestions (length: {len(document_content)}): {document_content[:200]}...")
+            
+            # Use the same approach as summary generation - ask about the document by name
+            doc_name = ragflow_doc.get('name', 'this document')
+            
+            # Create a question that asks the assistant to generate questions about the specific document
+            # Use the UI language - translation will be handled in the main query processing
+            suggestion_prompt = PromptTemplates.get_query_suggestion_prompt()
+            suggestion_query = suggestion_prompt.format(doc_name=doc_name)
+            
+            # Debug: Log the query being used
+            Logger.info(f"Query suggestion query: {suggestion_query}")
+            
+            # Use RAGFlowChatEngine.process_query but don't store for annotations
+            try:
+                # Debug: Log the session key that will be used for suggestions
+                suggestion_session_key = f'ragflow_session_{doc_name}'
+                Logger.info(f"Query suggestion using session key: {suggestion_session_key}")
+                Logger.info(f"Current session state keys: {list(st.session_state.keys())}")
+                if suggestion_session_key in st.session_state:
+                    Logger.info(f"Session {suggestion_session_key} exists with ID: {st.session_state[suggestion_session_key]}")
+                else:
+                    Logger.info(f"Session {suggestion_session_key} does not exist yet")
+                
+                # Use store_for_annotations=False to prevent PDF annotations from query suggestions
+                response = RAGFlowChatEngine.process_query(suggestion_query, doc_name, store_for_annotations=False)
+                
+                if response and response.get('answer'):
+                    response_text = response['answer'].strip()
+                    Logger.info(f"Raw suggestion response: {response_text}")
+                    
+                else:
+                    Logger.error("No answer received from RAGFlowChatEngine")
+                    _store_fallback_suggestions(doc_id)
+                    return
+                    
+            except Exception as e:
+                Logger.error(f"Error using RAGFlowChatEngine for suggestions: {str(e)}")
+                _store_fallback_suggestions(doc_id)
+                return
+            
+        except Exception as e:
+            Logger.error(f"Error in chunk-based suggestion generation: {str(e)}")
+            _store_fallback_suggestions(doc_id)
+            return
+        
+        # Parse the response using the exact same logic as the original
+        suggestions = _parse_query_suggestions(response_text)
+        
+        # Store the suggestions using StateManager (same as original)
+        StateManager.store_query_suggestions(doc_id, suggestions)
+        
+        Logger.info(f"Generated {len(suggestions)} query suggestions for RAGFlow document {doc_id}")
+        
+    except Exception as e:
+        Logger.error(f"Error generating query suggestions for RAGFlow document: {str(e)}")
+        if doc_id:
+            _store_fallback_suggestions(doc_id)
+
+
+def _parse_query_suggestions(response_text: str) -> list:
+    """
+    Parse query suggestions from LLM response with improved parsing for RAGFlow responses.
+    
+    Args:
+        response_text: Raw response text from LLM
+        
+    Returns:
+        List of 3 query suggestions
+    """
+    suggestions = []
+    
+    # Debug: Log what we're trying to parse
+    Logger.info(f"Parsing suggestions from response: {response_text}")
+    
+    try:
+        # Try to parse as Python list (same as original)
+        suggestions = ast.literal_eval(response_text)
+        if not isinstance(suggestions, list):
+            raise ValueError("Response is not a list")
+        Logger.info(f"Successfully parsed as list: {suggestions}")
+    except Exception as parse_error:
+        Logger.warning(f"Could not parse suggestions as list: {parse_error}")
+        
+        # Enhanced parsing for RAGFlow responses        
+        # First, try to extract lines that look like questions
+        lines = response_text.strip().split('\n')
+        Logger.info(f"Splitting into lines: {lines}")
+        
+        for line in lines:
+            line = line.strip()
+            # Remove numbering, bullets, or dashes
+            line = re.sub(r'^[\d\.\-\*\•\s]+', '', line).strip()
+            # Remove quotes if present
+            line = line.strip('"\'')
+            
+            if line and ('?' in line or len(line) > 10):  # Must have question mark or be substantial
+                suggestions.append(line)
+                Logger.info(f"Added suggestion: {line}")
+                if len(suggestions) >= 3:
+                    break
+        
+        # If still no good suggestions, try the original regex approach
+        if len(suggestions) < 3:
+            Logger.info("Not enough suggestions from lines, trying regex...")
+            # Look for text in quotes
+            quote_matches = re.findall(r'"([^"]*)"', response_text)
+            if quote_matches:
+                for match in quote_matches:
+                    if match not in suggestions:
+                        suggestions.append(match)
+                        Logger.info(f"Added quoted suggestion: {match}")
+                        if len(suggestions) >= 3:
+                            break
+            
+            # If still not enough, try to extract questions by question marks
+            if len(suggestions) < 3:
+                Logger.info("Still not enough, trying question mark extraction...")
+                question_matches = re.findall(r'[^.!?]*\?', response_text)
+                for match in question_matches:
+                    clean_match = match.strip()
+                    if clean_match and clean_match not in suggestions:
+                        suggestions.append(clean_match)
+                        Logger.info(f"Added question mark suggestion: {clean_match}")
+                        if len(suggestions) >= 3:
+                            break
+    
+    # Clean up suggestions
+    cleaned_suggestions = []
+    for suggestion in suggestions:
+        # Remove any remaining numbering or formatting
+        clean = re.sub(r'^[\d\.\-\*\•\s]+', '', suggestion).strip()
+        clean = clean.strip('"\'')
+        
+        # Remove RAGFlow citations like [ID:0], [ID:1], etc.
+        clean = re.sub(r'\s*\[ID:\d+\]', '', clean)
+        
+        if clean and len(clean) > 5:  # Must be substantial
+            cleaned_suggestions.append(clean)
+    
+    suggestions = cleaned_suggestions
+    Logger.info(f"Cleaned suggestions: {suggestions}")
+    
+    # Ensure we have exactly 3 questions (same as original)
+    if len(suggestions) > 3:
+        suggestions = suggestions[:3]
+    elif len(suggestions) < 3:
+        Logger.warning(f"Only got {len(suggestions)} suggestions, adding defaults")
+        # Add default questions if we don't have enough (same as original)
+        default_questions = [
+            "What is the main topic of this document?",
+            "What are the key findings in this document?",
+            "Summarize this document briefly."
+        ]
+        
+        # Fill in with default questions as needed
+        suggestions = suggestions + default_questions[:(3 - len(suggestions))]
+    
+    Logger.info(f"Final suggestions: {suggestions}")
+    return suggestions
+
+
+def _store_fallback_suggestions(doc_id: str) -> None:
+    """
+    Store fallback suggestions when generation fails (same as original).
+    
+    Args:
+        doc_id: Document ID
+    """
+    fallback_suggestions = [
+        "What is the main topic of this document?",
+        "What are the key findings in this document?",
+        "Summarize this document briefly."
+    ]
+    
+    StateManager.store_query_suggestions(doc_id, fallback_suggestions)
+    Logger.info(f"Stored fallback suggestions for document {doc_id}")
+
+
 def initialize_ragflow_session():
     """Initialize RAGFlow-specific session state variables."""
     
@@ -318,6 +567,10 @@ def initialize_ragflow_session():
     
     if 'ragflow_document_mapping' not in st.session_state:
         st.session_state.ragflow_document_mapping = {}
+    
+    # Initialize query suggestions (same as StateManager)
+    if 'document_query_suggestions' not in st.session_state:
+        st.session_state.document_query_suggestions = {}
     
     # Initialize other required session state variables
     if 'processed_files' not in st.session_state:

@@ -141,29 +141,9 @@ Zusammenfassung:"""
     }
     
     QUERY_SUGGESTION_PROMPTS = {
-        'en': """Please generate 3 interesting and diverse questions that someone might want to ask about the following document.
-The questions should:
-- Cover different aspects of the document
-- Be specific and actionable
-- Help users explore the content effectively
-- Be formatted as a simple list (one question per line)
-
-Document content:
-{content}
-
-Questions:""",
+        'en': """Based on the document '{doc_name}', please generate exactly 3 specific questions that someone might want to ask about this document. The questions should explore different aspects of the content and be specific to what's actually in the document. Return only the 3 questions, one per line, without numbering or bullets.""",
         
-        'de': """Bitte generieren Sie 3 interessante und vielfältige Fragen, die jemand zu dem folgenden Dokument stellen könnte.
-Die Fragen sollten:
-- Verschiedene Aspekte des Dokuments abdecken
-- Spezifisch und umsetzbar sein
-- Benutzern helfen, den Inhalt effektiv zu erkunden
-- Als einfache Liste formatiert sein (eine Frage pro Zeile)
-
-Dokumentinhalt:
-{content}
-
-Fragen:"""
+        'de': """Basierend auf dem Dokument '{doc_name}', generieren Sie bitte genau 3 spezifische Fragen, die jemand zu diesem Dokument stellen könnte. Die Fragen sollten verschiedene Aspekte des Inhalts erkunden und spezifisch für das sein, was tatsächlich im Dokument steht. Geben Sie nur die 3 Fragen zurück, eine pro Zeile, ohne Nummerierung oder Aufzählungszeichen."""
     }
     
     @staticmethod
