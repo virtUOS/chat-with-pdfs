@@ -130,7 +130,6 @@ class RAGFlowDocumentManager:
         all_unified_images = []
         
         for document in docs:
-            # DEBUG: Log chunk info
             page_num = document.get('metadata', {}).get('page')
             text_len = len(document.get('text', ''))
             preview = document.get('text', '')[:200].replace('\n', ' ')
@@ -359,7 +358,6 @@ class RAGFlowDocumentManager:
         all_unified_images = []
         
         for document in docs:
-            # DEBUG: Log chunk info
             page_num = document.get('metadata', {}).get('page')
             text_len = len(document.get('text', ''))
             preview = document.get('text', '')[:200].replace('\n', ' ')
@@ -635,8 +633,6 @@ class RAGFlowDocumentManager:
                         # Extract caption from text after image
                         caption = RAGFlowDocumentManager._extract_simple_caption(document["text"], match)
                         
-                        # Debug: Log the text around the image for caption analysis
-                        Logger.info(f"DEBUG: Text around image on page {page_num}:")
                         start_pos = max(0, match.start() - 200)
                         end_pos = min(len(document["text"]), match.end() + 200)
                         context_text = document["text"][start_pos:end_pos]

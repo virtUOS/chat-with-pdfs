@@ -42,8 +42,6 @@ def process_source_for_images(source, current_doc_id, available_images):
     Logger.info(f"Available images count: {len(available_images)}")
     
 
-    # DEBUG: Log page number and Markdown image references
-    Logger.info(f"Source page: {page_num}")
     if text:
         import re
         image_matches = re.findall(r'!\[\]\(([^)]+)\)', text)

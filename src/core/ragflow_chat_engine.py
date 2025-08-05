@@ -112,13 +112,7 @@ class RAGFlowChatEngine:
             # Log basic response info
             Logger.info(f"RAGFlow response - Answer length: {len(answer)}, Found {len(reference.get('chunks', []))} source chunks")
             
-            # DEBUG: Log the structure of the first chunk to understand coordinates
             chunks = reference.get('chunks', [])
-            if chunks:
-                first_chunk = chunks[0]
-                Logger.info(f"DEBUG: First chunk keys: {list(first_chunk.keys())}")
-                Logger.info(f"DEBUG: First chunk positions: {first_chunk.get('positions', 'No positions')}")
-                Logger.info(f"DEBUG: First chunk sample: {str(first_chunk)[:500]}...")
             
             # Update session ID if provided
             if data.get('session_id'):

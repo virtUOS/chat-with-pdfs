@@ -117,9 +117,6 @@ def create_annotations_from_sources(answer_text, sources, citation_mapping=None,
     # Deduplicate citations to avoid creating multiple annotations for the same source
     unique_citations = list(set(citations))
     
-    print(f"DEBUG: Found citations: {citations}")
-    print(f"DEBUG: Unique citations: {unique_citations}")
-    print(f"DEBUG: Current document: {current_document_name}")
     
     annotations = []
 
@@ -128,9 +125,7 @@ def create_annotations_from_sources(answer_text, sources, citation_mapping=None,
         source_index = None
         if citation_mapping and str(idx) in citation_mapping:
             source_index = citation_mapping[str(idx)]
-            print(f"DEBUG: Citation {idx} maps to source index {source_index}")
         else:
-            print(f"DEBUG: No mapping found for citation {idx}")
             continue  # Skip if no mapping available
         
         if 0 <= source_index < len(sources):
@@ -138,17 +133,13 @@ def create_annotations_from_sources(answer_text, sources, citation_mapping=None,
             
             # Only create annotations for sources from the current document
             if current_document_name and _is_source_from_current_document(source, current_document_name):
-                print(f"DEBUG: Source {source_index} matches current document, creating annotations")
                 # Only create precise annotations using RAGFlow positions
                 ragflow_annotations = _create_ragflow_position_annotations(source, idx, answer_text)
                 if ragflow_annotations:
-                    print(f"DEBUG: Created {len(ragflow_annotations)} annotations for citation {idx}")
                     annotations.extend(ragflow_annotations)
-            else:
-                print(f"DEBUG: Source {source_index} does not match current document")
             # No fallback - only precise annotations
         else:
-            print(f"DEBUG: Source index {source_index} out of range")
+            continue  # Source index out of range
     
     return annotations
 

@@ -279,7 +279,6 @@ def render_main_content() -> None:
                                                         # Get the source using the original index
                                                         source = msg["sources"][original_source_index]
                                                         
-                                                        # DEBUG: Log full source text before formatting
                                                         try:
                                                             full_text = getattr(source, 'text', '')
                                                             Logger.info(f"Full source text (len={len(full_text)}): {full_text[:500].replace('\n', ' ')}")
