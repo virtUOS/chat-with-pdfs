@@ -1,6 +1,7 @@
 """
 RAGFlow-based query engine and response synthesis for the Chat with Docs application.
 """
+import re
 
 import streamlit as st
 from typing import Dict, Any, List
@@ -8,6 +9,7 @@ from typing import Dict, Any, List
 from ..utils.logger import Logger
 from ..utils.image import get_document_images
 from ..ragflow_client import create_client
+from ..utils.prompts import PromptTemplates
 
 
 class RAGFlowChatEngine:
@@ -48,7 +50,6 @@ class RAGFlowChatEngine:
             
             # Add document context to scope the query to the specific document
             # This helps RAGFlow focus on the intended document rather than searching the entire dataset
-            from ..utils.prompts import PromptTemplates
             scoped_prompt = PromptTemplates.get_document_scoping_prompt().format(doc_name=file_name, question=prompt)
             Logger.info(f"Scoped query: {scoped_prompt[:100]}...")
             
@@ -270,7 +271,6 @@ class RAGFlowChatEngine:
                             Logger.debug(f"Added image from RAGFlow chunk: {img_info.get('file_path')}")
                 
                 # Check for image references in chunk content
-                import re
                 image_refs = re.findall(r'!\[.*?\]\((.*?)\)', chunk_content)
                 for img_path in image_refs:
                     if not any(img.get('file_path') == img_path for img in images):

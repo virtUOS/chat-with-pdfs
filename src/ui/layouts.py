@@ -9,11 +9,12 @@ from streamlit_js_eval import streamlit_js_eval
 from streamlit_dimensions import st_dimensions
 
 from ..utils.logger import Logger
-from ..utils.source import format_source_for_display, get_source_page_numbers_for_display, format_page_numbers_for_display, get_source_annotation_snippets
+from ..utils.source import format_source_for_display, get_source_page_numbers_for_display, format_page_numbers_for_display, get_source_annotation_snippets, create_annotations_from_sources
 from ..utils.i18n import I18n
 from ..utils.ragflow_common import get_available_ragflow_assistants, set_selected_ragflow_assistant, get_assistant_documents, get_assistant_dataset_names, generate_ragflow_query_suggestions
+from ..ragflow_client import create_client
 from .components import (
-    display_document_info, display_document_images, display_ragflow_document_info, display_ragflow_document_images,
+    display_ragflow_document_info, display_ragflow_document_images,
 )
 from .handlers import handle_query_submission
 
@@ -151,7 +152,6 @@ def render_main_content() -> None:
             # Download PDF from RAGFlow
             try:
                 with st.spinner(I18n.t('loading_pdf_from_ragflow')):
-                    from ..ragflow_client import create_client
                     client = create_client()
                     
                     dataset_id = current_ragflow_doc.get('dataset_id')
@@ -180,10 +180,7 @@ def render_main_content() -> None:
                 st.session_state.document_responses[current_file] and
                 'sources' in st.session_state.document_responses[current_file] and
                 'answer' in st.session_state.document_responses[current_file]):
-                
-                # Import the function to create annotations from sources
-                from ..utils.source import create_annotations_from_sources
-                
+                                
                 # Create annotations based on the document-specific response
                 doc_response = st.session_state.document_responses[current_file]
                 citation_mapping = doc_response.get('citation_mapping', {})

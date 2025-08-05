@@ -3,6 +3,7 @@ Reusable UI components for the Chat with Docs application.
 """
 
 import os
+import re
 import streamlit as st
 import ast
 import fitz  # PyMuPDF
@@ -658,97 +659,6 @@ def display_ragflow_document_images(ragflow_doc: dict, container_height: int | N
         Logger.error(f"Error extracting images: {e}")
         st.error(I18n.t('error_extracting_images', error=str(e)))
 
-
-# This function has been removed as it was redundant.
-# Images are already extracted during document processing using pymupdf4llm
-# and stored in session state via StateManager.store_document_unified_images()
-
-
-def _extract_image_caption_from_text(page_text: str, img_index: int, page_num: int) -> str:
-    """Extract caption for an image from page text using heuristics."""
-    import re
-    
-    try:
-        # Split text into lines
-        lines = page_text.splitlines()
-        
-        # Look for common caption patterns (more comprehensive)
-        caption_patterns = [
-            r'^(Figure|Fig\.|Table|Diagram|Chart|Image|Photo)\s*\d+[:\.]?\s*(.+)',  # Figure 8: caption
-            r'^(Figure|Fig\.|Table|Diagram|Chart|Image|Photo)\s*\d+\s+(.+)',       # Figure 8 caption
-            r'^(Figure|Fig\.|Table|Diagram|Chart|Image|Photo)\s+\d+[:\.]?\s*(.+)', # Figure 8: caption
-            r'^(Figure|Fig\.|Table|Diagram|Chart|Image|Photo)[:\.]?\s*(.+)',       # Figure: caption
-        ]
-        
-        caption_lines = []
-        max_caption_length = 300
-        
-        for i, line in enumerate(lines):
-            line = line.strip()
-            if not line:
-                continue
-                
-            # Check if line matches caption patterns
-            for pattern in caption_patterns:
-                match = re.match(pattern, line, re.IGNORECASE)
-                if match:
-                    # Found a caption start - include the full match (e.g., "Figure 8: caption text")
-                    if len(match.groups()) >= 2:
-                        # Reconstruct the full caption with figure number
-                        figure_part = match.group(1)  # "Figure", "Fig.", etc.
-                        caption_text = match.group(2)  # The actual caption text
-                        # Extract figure number from the original line
-                        figure_match = re.search(r'(\d+)', line)
-                        if figure_match:
-                            figure_num = figure_match.group(1)
-                            full_caption = f"{figure_part} {figure_num}: {caption_text}"
-                        else:
-                            full_caption = f"{figure_part}: {caption_text}"
-                        caption_lines.append(full_caption)
-                    else:
-                        caption_lines.append(match.group(1))
-                    
-                    # Look for continuation lines
-                    for j in range(i + 1, min(i + 5, len(lines))):  # Check next few lines
-                        next_line = lines[j].strip()
-                        if not next_line:
-                            continue
-                        # Stop if we hit another section or caption
-                        if re.match(r'^(Figure|Fig\.|Table|Diagram|Chart|Image|Photo|#|##|\s*INTRODUCTION|ABSTRACT|REFERENCES)', next_line, re.IGNORECASE):
-                            break
-                        # Add continuation if it looks like part of caption
-                        if len(next_line) < 200 and not re.match(r'^\d{1,4}$', next_line):
-                            caption_lines.append(next_line)
-                        else:
-                            break
-                    
-                    # Join and clean up caption
-                    caption = ' '.join(caption_lines).strip()
-                    if len(caption) > max_caption_length:
-                        caption = caption[:max_caption_length] + "..."
-                    
-                    if caption:
-                        Logger.info(f"Extracted caption for image {img_index} on page {page_num}: '{caption[:100]}...'")
-                        return caption
-                    break
-        
-        # If no specific caption pattern found, look for text near common figure references
-        for line in lines:
-            line = line.strip()
-            if re.search(r'\b(see\s+)?(figure|fig|image|diagram|chart)\b', line, re.IGNORECASE):
-                # This might be a reference to a figure, use it as a simple caption
-                if len(line) < 200:
-                    Logger.info(f"Found figure reference for image {img_index} on page {page_num}: '{line[:100]}...'")
-                    return line
-        
-        Logger.info(f"No caption found for image {img_index} on page {page_num}")
-        return ""
-        
-    except Exception as e:
-        Logger.warning(f"Error extracting caption for image {img_index} on page {page_num}: {e}")
-        return ""
-
-
 def _get_ragflow_document_details(ragflow_doc: dict) -> dict:
     """Get additional document details from RAGFlow API."""
     try:
@@ -826,7 +736,6 @@ def _generate_document_summary_with_assistant(ragflow_doc: dict) -> dict | None:
         
         if response and response.get('answer'):
             # Remove citations from summary text (same as query suggestions)
-            import re
             summary_text = response['answer']
             summary_text = re.sub(r'\s*\[ID:\d+\]', '', summary_text)
             
