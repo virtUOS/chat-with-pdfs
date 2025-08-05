@@ -34,4 +34,5 @@ insert-variables.sh
 .roomodes
 
 # Documentation (local reference only)
-RAGFLOW_MIGRATION.md
+RAGFLOW_*.md
+internal-docs/
