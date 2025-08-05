@@ -228,34 +228,6 @@ class RAGFlowClient:
         response = self._make_request('POST', f'/api/v1/chats/{chat_id}/completions', json=data)
         return response.json()
     
-    def get_chunk_image(self, image_id: str) -> bytes:
-        """
-        Attempt to retrieve an image for a chunk by image ID.
-        
-        Args:
-            image_id: The image ID from chunk reference
-            
-        Returns:
-            Image data as bytes
-        """
-        # Try common image endpoint patterns
-        possible_endpoints = [
-            f'/api/v1/images/{image_id}',
-            f'/api/v1/chunks/images/{image_id}',
-            f'/api/v1/documents/images/{image_id}',
-            f'/images/{image_id}',
-            f'/static/images/{image_id}',
-        ]
-        
-        for endpoint in possible_endpoints:
-            try:
-                response = self._make_request('GET', endpoint)
-                if response.status_code == 200:
-                    return response.content
-            except:
-                continue
-        
-        raise ValueError(f"Could not retrieve image for ID: {image_id}")
 
 
 def create_client() -> RAGFlowClient:
