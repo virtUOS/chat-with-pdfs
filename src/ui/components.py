@@ -10,6 +10,7 @@ from datetime import datetime
 
 from ..utils.logger import Logger
 from ..utils.i18n import I18n
+from ..utils.prompts import PromptTemplates
 from ..utils.source import extract_citation_indices, format_source_for_display, get_source_page_numbers_for_display, format_page_numbers_for_display, get_source_annotation_snippets
 from ..core.state_manager import StateManager
 from ..core.ragflow_chat_engine import RAGFlowChatEngine
@@ -816,8 +817,9 @@ def _get_or_generate_document_summary(ragflow_doc: dict) -> dict | str | None:
 def _generate_document_summary_with_assistant(ragflow_doc: dict) -> dict | None:
     """Generate a document summary using the RAGFlow assistant."""
     try:
-        # Use the chat engine to ask for a summary
-        summary_query = f"Please provide a brief summary of the document '{ragflow_doc.get('name', 'this document')}'. Include the main topics, key points, and purpose of the document in 2-3 sentences."
+        # Get language-appropriate summary query from prompts
+        doc_name = ragflow_doc.get('name', 'this document')
+        summary_query = PromptTemplates.get_summary_query_prompt().format(doc_name=doc_name)
         
         # Use store_for_annotations=False to prevent PDF annotations from summary generation
         response = RAGFlowChatEngine.process_query(summary_query, ragflow_doc.get('name', ''), store_for_annotations=False)

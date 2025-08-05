@@ -48,7 +48,8 @@ class RAGFlowChatEngine:
             
             # Add document context to scope the query to the specific document
             # This helps RAGFlow focus on the intended document rather than searching the entire dataset
-            scoped_prompt = f"Please answer this question specifically about the document '{file_name}': {prompt}"
+            from ..utils.prompts import PromptTemplates
+            scoped_prompt = PromptTemplates.get_document_scoping_prompt().format(doc_name=file_name, question=prompt)
             Logger.info(f"Scoped query: {scoped_prompt[:100]}...")
             
             # Initialize RAGFlow chat engine
