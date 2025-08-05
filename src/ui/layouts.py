@@ -196,7 +196,7 @@ def render_main_content() -> None:
             # Create PDF viewer component with responsive height
             screen_height = streamlit_js_eval(js_expressions='screen.height', key='pdf_screen_height')
             pdf_height = int(screen_height * 0.8) if screen_height else 900  # Increased height
-            
+
             # Define a simple annotation click handler
             def annotation_click_handler(annotation):
                 """Handle clicks on source annotations in the PDF viewer."""
@@ -359,7 +359,7 @@ def render_main_content() -> None:
                                                     Logger.error(f"Error displaying image {img_info['file_path']}: {e}")
                                                     st.warning(f"Error displaying image: {os.path.basename(img_info['file_path']) if 'file_path' in img_info else 'Unknown'}")
             
-            # Display query suggestions as pills if available (but not for scanned documents)
+            # Display query suggestions as pills if available
             # In RAGFlow, we use the document ID from current_ragflow_doc
             current_ragflow_doc = st.session_state.get('current_ragflow_doc', {})
             current_doc_id = current_ragflow_doc.get('id', '')
