@@ -94,13 +94,54 @@ class RAGFlowChatEngine:
                 else:
                     Logger.error(f"Failed to initialize RAGFlow session: {init_response.get('message')}")
             
+            # Language analysis for cross-language debugging
+            def detect_language_hints(text):
+                """Simple language detection based on common words."""
+                text_lower = text.lower()
+                german_indicators = ['der', 'die', 'das', 'und', 'oder', 'ist', 'sind', 'haben', 'werden', 'können', 'soll', 'wird', 'wurde', 'dass', 'wenn', 'aber', 'auch', 'nicht', 'nur', 'noch', 'mehr', 'sehr', 'nach', 'beim', 'zwischen', 'unterschied', 'unterschiede', 'welche', 'warum', 'wie', 'inwiefern']
+                english_indicators = ['the', 'and', 'or', 'is', 'are', 'have', 'will', 'can', 'should', 'was', 'that', 'if', 'but', 'also', 'not', 'only', 'more', 'very', 'after', 'between', 'difference', 'differences', 'which', 'why', 'how']
+                
+                german_score = sum(1 for word in german_indicators if word in text_lower)
+                english_score = sum(1 for word in english_indicators if word in text_lower)
+                
+                if german_score > english_score and german_score > 0:
+                    return 'likely_german'
+                elif english_score > german_score and english_score > 0:
+                    return 'likely_english'
+                else:
+                    return 'unclear'
+            
+            query_language = detect_language_hints(prompt)
+            scoped_query_language = detect_language_hints(scoped_prompt)
+            
+            # Log detailed request information for debugging
+            request_info = {
+                'chat_id': chat_id,
+                'session_id': session_id,
+                'prompt_length': len(scoped_prompt),
+                'original_prompt_length': len(prompt),
+                'file_name': file_name,
+                'store_for_annotations': store_for_annotations,
+                'query_language_hint': query_language,
+                'scoped_query_language_hint': scoped_query_language,
+                'contains_german_chars': any(char in prompt for char in 'äöüßÄÖÜ'),
+                'ui_language': st.session_state.get('language', 'unknown')
+            }
+            Logger.info(f"RAGFlow request details: {request_info}")
+            
             # Execute query with RAGFlow using the scoped prompt
+            import time
+            start_time = time.time()
+            
             response = chat_engine.client.chat_completion(
                 chat_id=chat_id,
                 question=scoped_prompt,
                 stream=False,
                 session_id=session_id
             )
+            
+            end_time = time.time()
+            response_time = end_time - start_time
             
             if response.get('code') != 0:
                 raise Exception(f"RAGFlow query failed: {response.get('message')}")
@@ -109,8 +150,58 @@ class RAGFlowChatEngine:
             answer = data.get('answer', '')
             reference = data.get('reference', {})
             
-            # Log basic response info
-            Logger.info(f"RAGFlow response - Answer length: {len(answer)}, Found {len(reference.get('chunks', []))} source chunks")
+            # Enhanced logging with more diagnostic information
+            Logger.info(f"RAGFlow response - Answer length: {len(answer)}, Found {len(reference.get('chunks', []))} source chunks, Response time: {response_time:.2f}s")
+            Logger.info(f"RAGFlow response keys: {list(data.keys())}")
+            Logger.info(f"Reference keys: {list(reference.keys()) if reference else 'No reference object'}")
+            
+            # Enhanced citation and reference analysis
+            import re
+            citation_matches = re.findall(r'\[ID:(\d+)\]', answer)
+            citation_ids = list(set(citation_matches))  # unique citation IDs
+            has_citations = len(citation_ids) > 0
+            has_chunks = len(reference.get('chunks', [])) > 0
+            
+            # Log citation analysis
+            Logger.info(f"Citation analysis: Found {len(citation_ids)} unique citations: {citation_ids}")
+            Logger.info(f"Total citation occurrences: {len(citation_matches)}")
+            
+            # Log detailed response structure for diagnostic purposes
+            Logger.info(f"Response data structure analysis:")
+            Logger.info(f"  - Session ID in response: {data.get('session_id', 'Not provided')}")
+            Logger.info(f"  - Answer contains newlines: {'Yes' if '\\n' in answer else 'No'}")
+            Logger.info(f"  - Reference type: {type(reference)}")
+            Logger.info(f"  - Reference is empty dict: {reference == {}}")
+            
+            if has_citations and not has_chunks:
+                Logger.warning(f"RAGFlow inconsistency: Answer contains {len(citation_ids)} citations but no chunks provided")
+                Logger.warning(f"Citations found: {citation_ids}")
+                Logger.warning(f"LANGUAGE ANALYSIS - Query: {query_language}, UI: {request_info['ui_language']}, German chars: {request_info['contains_german_chars']}")
+                Logger.info(f"Full RAGFlow response structure:")
+                Logger.info(f"  - response keys: {list(response.keys()) if isinstance(response, dict) else 'Not a dict'}")
+                Logger.info(f"  - data keys: {list(data.keys()) if isinstance(data, dict) else 'Not a dict'}")
+                Logger.info(f"  - reference data: {reference}")
+                Logger.info(f"  - prompt length: {len(scoped_prompt)}")
+                Logger.info(f"  - session_id used: {session_id}")
+                Logger.info(f"  - original prompt: {prompt[:100]}...")
+                Logger.info(f"Answer with citations: {answer[:300]}...")
+            elif not has_citations and not has_chunks:
+                Logger.info(f"RAGFlow provided answer without retrieval (no citations, no chunks)")
+                Logger.info(f"Answer length: {len(answer)}")
+            elif has_citations and has_chunks:
+                Logger.info(f"RAGFlow working correctly: {len(reference.get('chunks', []))} chunks with {len(citation_ids)} unique citations")
+                # Log chunk information for successful cases
+                chunk_info = []
+                for i, chunk in enumerate(reference.get('chunks', [])[:3]):  # First 3 chunks only
+                    chunk_info.append({
+                        'chunk_id': chunk.get('id', 'No ID'),
+                        'content_length': len(chunk.get('content', '')),
+                        'doc_name': chunk.get('document_name', 'Unknown'),
+                        'similarity': chunk.get('similarity', 'N/A')
+                    })
+                Logger.info(f"Sample chunk info: {chunk_info}")
+            else:
+                Logger.warning(f"RAGFlow unusual case: {len(reference.get('chunks', []))} chunks without citations")
             
             chunks = reference.get('chunks', [])
             
