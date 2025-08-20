@@ -129,20 +129,57 @@ def get_available_ragflow_assistants():
     Get available chat assistants from RAGFlow server.
     
     Returns:
-        list: List of available chat assistant dictionaries from RAGFlow
+        dict: Dictionary with 'success', 'data', 'error_type', and 'error_message' keys
     """
     try:
         client = create_client()
         response = client.get_chat_assistants()
         
         if response.get('code') == 0:
-            return response.get('data', [])
+            return {
+                'success': True,
+                'data': response.get('data', []),
+                'error_type': None,
+                'error_message': None
+            }
         else:
-            Logger.error(f"Failed to get RAGFlow assistants: {response.get('message')}")
-            return []
+            error_message = response.get('message', 'Unknown error')
+            Logger.error(f"Failed to get RAGFlow assistants: {error_message}")
+            
+            # Check if it's an authentication error
+            if 'authentication' in error_message.lower() or 'api key' in error_message.lower() or 'invalid' in error_message.lower():
+                return {
+                    'success': False,
+                    'data': [],
+                    'error_type': 'authentication',
+                    'error_message': error_message
+                }
+            else:
+                return {
+                    'success': False,
+                    'data': [],
+                    'error_type': 'api_error',
+                    'error_message': error_message
+                }
     except Exception as e:
-        Logger.error(f"Error fetching RAGFlow assistants: {str(e)}")
-        return []
+        error_str = str(e)
+        Logger.error(f"Error fetching RAGFlow assistants: {error_str}")
+        
+        # Check if it's an authentication error in the exception
+        if 'authentication' in error_str.lower() or 'api key' in error_str.lower() or 'invalid' in error_str.lower():
+            return {
+                'success': False,
+                'data': [],
+                'error_type': 'authentication',
+                'error_message': error_str
+            }
+        else:
+            return {
+                'success': False,
+                'data': [],
+                'error_type': 'connection_error',
+                'error_message': error_str
+            }
 
 
 def get_selected_ragflow_assistant():

@@ -23,8 +23,10 @@ def render_sidebar() -> None:
     with st.sidebar:
         # Chat Assistant selection
         st.header(I18n.t('chat_assistant'))
-        try:
-            available_assistants = get_available_ragflow_assistants()
+        assistants_result = get_available_ragflow_assistants()
+        
+        if assistants_result['success']:
+            available_assistants = assistants_result['data']
             if available_assistants:
                 assistant_names = [assistant.get('name', 'Unnamed Assistant') for assistant in available_assistants]
                 assistant_ids = [assistant.get('id') for assistant in available_assistants]
@@ -104,8 +106,16 @@ def render_sidebar() -> None:
                         st.info(I18n.t('no_documents_in_kb'))
             else:
                 st.warning(I18n.t('no_chat_assistants'))
-        except Exception as e:
-            st.error(I18n.t('error_loading_assistants', error=str(e)))
+        else:
+            # Handle different error types with appropriate messages
+            error_type = assistants_result['error_type']
+            error_message = assistants_result['error_message']
+            
+            if error_type == 'authentication':
+                st.error(I18n.t('api_authentication_failed'))
+            else:
+                st.error(I18n.t('error_loading_assistants', error=error_message))
+            
             st.info(I18n.t('check_ragflow_connection'))
         
         # Settings section

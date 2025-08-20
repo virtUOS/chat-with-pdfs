@@ -55,10 +55,20 @@ class RAGFlowClient:
         Raises:
             requests.RequestException: If the request fails
         """
+        if not self.base_url:
+            raise ValueError("RAGFlow base URL is not set")
+            
         url = f"{self.base_url.rstrip('/')}/{endpoint.lstrip('/')}"
         
         try:
             response = self.session.request(method, url, **kwargs)
+            
+            # Handle authentication errors specifically
+            if response.status_code == 401:
+                raise requests.exceptions.HTTPError("Authentication error: API key is invalid!")
+            elif response.status_code == 403:
+                raise requests.exceptions.HTTPError("Authentication error: Access forbidden!")
+                
             response.raise_for_status()
             return response
         except requests.RequestException as e:
