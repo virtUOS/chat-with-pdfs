@@ -18,6 +18,7 @@ VectorStore/
 backup_obsolete_files/
 backup_code/
 test_files/
+test_scripts/
 
 # Roo/Memory Bank related
 memory-bank/
