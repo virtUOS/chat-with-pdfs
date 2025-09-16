@@ -212,3 +212,29 @@ class StateManager:
             List of image info dictionaries with file_path, caption, page, etc.
         """
         return st.session_state.get('document_unified_images', {}).get(doc_id, [])
+    
+    @staticmethod
+    def store_document_page_dimensions(doc_id: str, page_dimensions: Dict[int, Dict[str, float]]) -> None:
+        """Store page dimensions for a specific document.
+        
+        Args:
+            doc_id: The document ID
+            page_dimensions: Dictionary mapping page numbers to width/height
+        """
+        if 'document_page_dimensions' not in st.session_state:
+            st.session_state['document_page_dimensions'] = {}
+        st.session_state['document_page_dimensions'][doc_id] = page_dimensions
+    
+    @staticmethod
+    def get_document_page_dimensions(doc_id: str) -> Dict[int, Dict[str, float]]:
+        """Get page dimensions for a specific document.
+        
+        Args:
+            doc_id: The document ID
+            
+        Returns:
+            Dictionary mapping page numbers to width/height dictionaries
+        """
+        all_dims = st.session_state.get('document_page_dimensions', {})
+        result = all_dims.get(doc_id, {})
+        return result

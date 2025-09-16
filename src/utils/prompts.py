@@ -16,15 +16,15 @@ class PromptTemplates:
     }
     
     SUMMARY_QUERY_PROMPTS = {
-        'en': """Please provide a brief summary of the document '{doc_name}'. Include the main topics, key points, and purpose of the document in 2-3 sentences.""",
+        'en': """Please provide a brief summary of the document '{doc_name}' in English. Include the main topics, key points, and purpose of the document in 2-3 sentences.""",
         
-        'de': """Bitte erstellen Sie eine kurze Zusammenfassung des Dokuments '{doc_name}'. Geben Sie die Hauptthemen, wichtige Punkte und den Zweck des Dokuments in 2-3 Sätzen an."""
+        'de': """Bitte erstellen Sie eine kurze Zusammenfassung des Dokuments '{doc_name}' auf Deutsch. Geben Sie die Hauptthemen, wichtige Punkte und den Zweck des Dokuments in 2-3 Sätzen an."""
     }
     
     DOCUMENT_SCOPING_PROMPTS = {
-        'en': """Please answer this question specifically about the document '{doc_name}': {question}""",
+        'en': """Please answer this question specifically about the document '{doc_name}' in English: {question}""",
         
-        'de': """Bitte beantworten Sie diese Frage spezifisch über das Dokument '{doc_name}': {question}"""
+        'de': """Bitte beantworten Sie diese Frage spezifisch über das Dokument '{doc_name}' auf Deutsch. Antworten Sie ausschließlich auf Deutsch: {question}"""
     }
     
     

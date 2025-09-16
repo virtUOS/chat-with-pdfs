@@ -4,6 +4,7 @@ python-dotenv
 openai
 
 # RAGFlow dependencies
+ragflow-sdk
 requests
 httpx
 

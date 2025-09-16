@@ -129,57 +129,13 @@ def get_available_ragflow_assistants():
     Get available chat assistants from RAGFlow server.
     
     Returns:
-        dict: Dictionary with 'success', 'data', 'error_type', and 'error_message' keys
+        list: List of chat assistants
+        
+    Raises:
+        Exception: If unable to fetch assistants
     """
-    try:
-        client = create_client()
-        response = client.get_chat_assistants()
-        
-        if response.get('code') == 0:
-            return {
-                'success': True,
-                'data': response.get('data', []),
-                'error_type': None,
-                'error_message': None
-            }
-        else:
-            error_message = response.get('message', 'Unknown error')
-            Logger.error(f"Failed to get RAGFlow assistants: {error_message}")
-            
-            # Check if it's an authentication error
-            if 'authentication' in error_message.lower() or 'api key' in error_message.lower() or 'invalid' in error_message.lower():
-                return {
-                    'success': False,
-                    'data': [],
-                    'error_type': 'authentication',
-                    'error_message': error_message
-                }
-            else:
-                return {
-                    'success': False,
-                    'data': [],
-                    'error_type': 'api_error',
-                    'error_message': error_message
-                }
-    except Exception as e:
-        error_str = str(e)
-        Logger.error(f"Error fetching RAGFlow assistants: {error_str}")
-        
-        # Check if it's an authentication error in the exception
-        if 'authentication' in error_str.lower() or 'api key' in error_str.lower() or 'invalid' in error_str.lower():
-            return {
-                'success': False,
-                'data': [],
-                'error_type': 'authentication',
-                'error_message': error_str
-            }
-        else:
-            return {
-                'success': False,
-                'data': [],
-                'error_type': 'connection_error',
-                'error_message': error_str
-            }
+    client = create_client()
+    return client.get_chat_assistants()
 
 
 def get_selected_ragflow_assistant():
@@ -221,14 +177,11 @@ def get_assistant_documents():
         client = create_client()
         
         # Get assistant details to find associated datasets
-        assistants_response = client.get_chat_assistants()
-        if assistants_response.get('code') != 0:
-            Logger.error(f"Failed to get assistants: {assistants_response.get('message')}")
-            return []
+        assistants_list = client.get_chat_assistants()
         
         # Find the selected assistant
         selected_assistant = None
-        for assistant in assistants_response.get('data', []):
+        for assistant in assistants_list:
             if assistant.get('id') == assistant_id:
                 selected_assistant = assistant
                 break
@@ -291,14 +244,13 @@ def get_assistant_dataset_names():
         client = create_client()
         
         # Get assistant details
-        assistants_response = client.get_chat_assistants()
-        if assistants_response.get('code') != 0:
-            return {}
+        # Get assistant details
+        assistants_list = client.get_chat_assistants()
         
         # Find the selected assistant
         selected_assistant = None
-        for assistant in assistants_response.get('data', []):
-            if assistant.get('id') == assistant_id:
+        for assistant in assistants_list:
+            if assistant.get("id") == assistant_id:
                 selected_assistant = assistant
                 break
         
@@ -306,13 +258,13 @@ def get_assistant_dataset_names():
             return {}
         
         # Get datasets from the assistant (according to RAGFlow API docs)
-        datasets = selected_assistant.get('datasets', [])
+        datasets = selected_assistant.get("datasets", [])
         dataset_names = {}
         
         # The datasets array already contains the dataset info including names
         for dataset in datasets:
-            dataset_id = dataset.get('id')
-            dataset_name = dataset.get('name', f'Dataset {dataset_id}')
+            dataset_id = dataset.get("id")
+            dataset_name = dataset.get("name", f"Dataset {dataset_id}")
             if dataset_id:
                 dataset_names[dataset_id] = dataset_name
         
@@ -370,33 +322,36 @@ def generate_ragflow_query_suggestions(ragflow_doc: dict) -> None:
         
         client = create_client()
         
-        # Get document chunks directly from RAGFlow API (more reliable than retrieve)
+        # Get document chunks using SDK
         try:
-            # Get document chunks directly to ensure we have the actual content
-            chunks_response = client._make_request('GET', f'/api/v1/datasets/{dataset_id}/documents/{doc_id}/chunks')
+            # Find the dataset and document
+            datasets = client.ragflow.list_datasets()
+            target_doc = None
+            for dataset in datasets:
+                if dataset.id == dataset_id:
+                    documents = dataset.list_documents()
+                    for doc in documents:
+                        if doc.id == doc_id:
+                            target_doc = doc
+                            break
+                    break
             
-            if chunks_response.status_code != 200:
-                Logger.error(f"Failed to get document chunks for suggestions: {chunks_response.status_code}")
-                _store_fallback_suggestions(doc_id)
+            if not target_doc:
+                Logger.error(f"Document {doc_id} not found in dataset {dataset_id}")
+                _mark_query_generation_failure(doc_id)
                 return
             
-            chunks_data = chunks_response.json()
-            if chunks_data.get('code') != 0:
-                Logger.error(f"Failed to get document chunks: {chunks_data.get('message')}")
-                _store_fallback_suggestions(doc_id)
-                return
-            
-            chunks = chunks_data.get('data', {}).get('chunks', [])
-            if not chunks:
+            # Get chunks using SDK
+            chunk_objects = target_doc.list_chunks()
+            if not chunk_objects:
                 Logger.warning(f"No chunks found for document {doc_id}")
-                _store_fallback_suggestions(doc_id)
+                _mark_query_generation_failure(doc_id)
                 return
             
             # Extract content from chunks (same as LlamaIndex approach)
-            sample_chunks = chunks[:min(5, len(chunks))]  # Use first 5 chunks
+            sample_chunks = chunk_objects[:min(5, len(chunk_objects))]  # Use first 5 chunks
             document_content = "\n\n".join([
-                chunk.get('content_with_weight', '') or chunk.get('content', '')
-                for chunk in sample_chunks
+                chunk.content for chunk in sample_chunks if chunk.content
             ])
             
             # Limit content length (same as LlamaIndex: 5000 chars)
@@ -406,7 +361,7 @@ def generate_ragflow_query_suggestions(ragflow_doc: dict) -> None:
             
             if not document_content.strip():
                 Logger.warning(f"No text content found in document chunks for {doc_id}")
-                _store_fallback_suggestions(doc_id)
+                _mark_query_generation_failure(doc_id)
                 return
             
             # Debug: Log the content being used
@@ -440,20 +395,21 @@ def generate_ragflow_query_suggestions(ragflow_doc: dict) -> None:
                 if response and response.get('answer'):
                     response_text = response['answer'].strip()
                     Logger.info(f"Raw suggestion response: {response_text}")
+                    Logger.info(f"ALL Response: {response_text}")
                     
                 else:
                     Logger.error("No answer received from RAGFlowChatEngine")
-                    _store_fallback_suggestions(doc_id)
+                    _mark_query_generation_failure(doc_id)
                     return
                     
             except Exception as e:
                 Logger.error(f"Error using RAGFlowChatEngine for suggestions: {str(e)}")
-                _store_fallback_suggestions(doc_id)
+                _mark_query_generation_failure(doc_id)
                 return
             
         except Exception as e:
             Logger.error(f"Error in chunk-based suggestion generation: {str(e)}")
-            _store_fallback_suggestions(doc_id)
+            _mark_query_generation_failure(doc_id)
             return
         
         # Parse the response using the exact same logic as the original
@@ -467,7 +423,7 @@ def generate_ragflow_query_suggestions(ragflow_doc: dict) -> None:
     except Exception as e:
         Logger.error(f"Error generating query suggestions for RAGFlow document: {str(e)}")
         if doc_id:
-            _store_fallback_suggestions(doc_id)
+            _mark_query_generation_failure(doc_id)
 
 
 def _parse_query_suggestions(response_text: str) -> list:
@@ -572,21 +528,40 @@ def _parse_query_suggestions(response_text: str) -> list:
     return suggestions
 
 
-def _store_fallback_suggestions(doc_id: str) -> None:
+def _mark_query_generation_failure(doc_id: str) -> None:
     """
-    Store fallback suggestions when generation fails (same as original).
+    Mark document as having failed query generation.
     
     Args:
         doc_id: Document ID
     """
-    fallback_suggestions = [
-        "What is the main topic of this document?",
-        "What are the key findings in this document?",
-        "Summarize this document briefly."
-    ]
+    # Mark this document as having failed query generation
+    if 'query_suggestion_failures' not in st.session_state:
+        st.session_state.query_suggestion_failures = set()
+    st.session_state.query_suggestion_failures.add(doc_id)
     
-    StateManager.store_query_suggestions(doc_id, fallback_suggestions)
-    Logger.info(f"Stored fallback suggestions for document {doc_id}")
+    Logger.info(f"Marked query generation failure for document {doc_id}")
+
+
+def retry_query_suggestions(doc_id: str, ragflow_doc: dict) -> None:
+    """
+    Retry generating query suggestions for a failed document.
+    
+    Args:
+        doc_id: Document ID
+        ragflow_doc: RAGFlow document dictionary
+    """
+    # Remove from failures set
+    if 'query_suggestion_failures' in st.session_state:
+        st.session_state.query_suggestion_failures.discard(doc_id)
+    
+    # Clear existing suggestions
+    if doc_id in st.session_state.get('document_query_suggestions', {}):
+        del st.session_state.document_query_suggestions[doc_id]
+    
+    # Retry generation
+    Logger.info(f"Retrying query suggestion generation for document {doc_id}")
+    generate_ragflow_query_suggestions(ragflow_doc)
 
 
 def initialize_ragflow_session():
@@ -608,6 +583,10 @@ def initialize_ragflow_session():
     # Initialize query suggestions (same as StateManager)
     if 'document_query_suggestions' not in st.session_state:
         st.session_state.document_query_suggestions = {}
+    
+    # Initialize query suggestion failures
+    if 'query_suggestion_failures' not in st.session_state:
+        st.session_state.query_suggestion_failures = set()
     
     # Initialize other required session state variables
     if 'processed_files' not in st.session_state:

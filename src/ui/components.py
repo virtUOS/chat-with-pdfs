@@ -12,7 +12,8 @@ from datetime import datetime
 from ..utils.logger import Logger
 from ..utils.i18n import I18n
 from ..utils.prompts import PromptTemplates
-from ..utils.source import extract_citation_indices, format_source_for_display, get_source_page_numbers_for_display, format_page_numbers_for_display, get_source_annotation_snippets
+from ..utils.citations import extract_citation_indices
+from ..utils.source_formatting import format_source_for_display, get_source_page_numbers_for_display, format_page_numbers_for_display
 from ..core.state_manager import StateManager
 from ..core.ragflow_chat_engine import RAGFlowChatEngine
 from ..core.ragflow_document_manager import RAGFlowDocumentManager
@@ -128,66 +129,6 @@ def display_ragflow_document_info(ragflow_doc: dict) -> None:
             citation_mapping = {}
         
         st.markdown(summary_text)
-        
-        # Display sources if available (like in chat)
-        if sources and citation_mapping:
-            # Extract citation numbers from the summary
-            citations = extract_citation_indices(summary_text)
-            
-            if citations:
-                with st.expander(f"📚 {I18n.t('show_sources')}"):
-                    displayed_sources = set()
-                    
-                    for citation_num in sorted(citations):
-                        # Get the original source index from the mapping
-                        if str(citation_num) in citation_mapping:
-                            original_source_index = citation_mapping[str(citation_num)]
-                            
-                            if original_source_index in displayed_sources:
-                                continue  # Skip if already displayed this source
-                            
-                            if original_source_index < len(sources):
-                                # Get the source using the original index
-                                source = sources[original_source_index]
-                                
-                                # Extract all page numbers that this source spans
-                                try:
-                                    page_numbers = get_source_page_numbers_for_display(source)
-                                    page_display = format_page_numbers_for_display(page_numbers)
-                                except Exception:
-                                    page_display = I18n.t('error')
-                                
-                                # Get document name and similarity for nice display
-                                if isinstance(source, dict):
-                                    doc_name = source.get('metadata', {}).get('document_name', I18n.t('unknown_document'))
-                                    similarity = source.get('metadata', {}).get('similarity', 0.0)
-                                else:
-                                    doc_name = I18n.t('unknown_document')
-                                    similarity = 0.0
-                                
-                                # Display in a nice format like the test script
-                                st.markdown(f"**{citation_num}. {doc_name}** ({I18n.t('similarity')}: {similarity:.3f})")
-                                if page_display not in ['N/A', I18n.t('error')]:
-                                    st.caption(f"📄 {page_display}")
-                                
-                                # Check if we have multiple annotation snippets
-                                annotation_snippets = get_source_annotation_snippets(source)
-                                
-                                if annotation_snippets and len(annotation_snippets) > 1:
-                                    # Display individual snippets for each annotation
-                                    st.markdown(f"**{I18n.t('multiple_text_segments')}:**")
-                                    for i, snippet in enumerate(annotation_snippets):
-                                        st.markdown(f"**{I18n.t('segment')} {i+1}** ({I18n.t('page')} {snippet['page']}):")
-                                        st.markdown(f"   _{snippet['text']}_")
-                                        if i < len(annotation_snippets) - 1:
-                                            st.markdown("")  # Add spacing between snippets
-                                else:
-                                    # Display single source text as before
-                                    source_text = format_source_for_display(source)
-                                    st.markdown(f"   {source_text}")
-                                
-                                st.markdown("---")  # Add separator between sources
-                                displayed_sources.add(original_source_index)
     else:
         # Show a button to generate summary
         if st.button(I18n.t('generate_summary'), key=f"generate_summary_{ragflow_doc.get('id')}"):

@@ -3,15 +3,20 @@ UI layouts for the Chat with Docs application.
 """
 
 import os
+import tempfile
+import fitz
 import streamlit as st
 from streamlit_pdf_viewer import pdf_viewer
 from streamlit_js_eval import streamlit_js_eval
 from streamlit_dimensions import st_dimensions
 
+
+from ..core.state_manager import StateManager
 from ..utils.logger import Logger
-from ..utils.source import format_source_for_display, get_source_page_numbers_for_display, format_page_numbers_for_display, get_source_annotation_snippets, create_annotations_from_sources
+from ..utils.source_formatting import format_source_for_display, get_source_page_numbers_for_display, format_page_numbers_for_display
+from ..utils.annotations import create_annotations_from_sources
 from ..utils.i18n import I18n
-from ..utils.ragflow_common import get_available_ragflow_assistants, set_selected_ragflow_assistant, get_assistant_documents, get_assistant_dataset_names, generate_ragflow_query_suggestions
+from ..utils.ragflow_common import get_available_ragflow_assistants, set_selected_ragflow_assistant, get_assistant_documents, get_assistant_dataset_names, generate_ragflow_query_suggestions, retry_query_suggestions
 from ..ragflow_client import create_client
 from .components import (
     display_ragflow_document_info, display_ragflow_document_images,
@@ -23,10 +28,9 @@ def render_sidebar() -> None:
     with st.sidebar:
         # Chat Assistant selection
         st.header(I18n.t('chat_assistant'))
-        assistants_result = get_available_ragflow_assistants()
         
-        if assistants_result['success']:
-            available_assistants = assistants_result['data']
+        try:
+            available_assistants = get_available_ragflow_assistants()
             if available_assistants:
                 assistant_names = [assistant.get('name', 'Unnamed Assistant') for assistant in available_assistants]
                 assistant_ids = [assistant.get('id') for assistant in available_assistants]
@@ -90,6 +94,12 @@ def render_sidebar() -> None:
                                     st.session_state.current_file = doc_name
                                     st.session_state.current_ragflow_doc = doc
                                     
+                                    # Create the document mapping for annotations
+                                    if 'ragflow_document_mapping' not in st.session_state:
+                                        st.session_state.ragflow_document_mapping = {}
+                                    st.session_state.ragflow_document_mapping[doc.get('id')] = doc_name
+                                    Logger.info(f"Created mapping: {doc.get('id')} -> {doc_name}")
+                                    
                                     # Generate query suggestions for the selected document (same as LlamaIndex version)
                                     try:
                                         generate_ragflow_query_suggestions(doc)
@@ -106,15 +116,16 @@ def render_sidebar() -> None:
                         st.info(I18n.t('no_documents_in_kb'))
             else:
                 st.warning(I18n.t('no_chat_assistants'))
-        else:
-            # Handle different error types with appropriate messages
-            error_type = assistants_result['error_type']
-            error_message = assistants_result['error_message']
+                
+        except Exception as e:
+            error_str = str(e)
+            Logger.error(f"Error fetching RAGFlow assistants: {error_str}")
             
-            if error_type == 'authentication':
+            # Check if it's an authentication error
+            if 'authentication' in error_str.lower() or 'api key' in error_str.lower() or 'invalid' in error_str.lower():
                 st.error(I18n.t('api_authentication_failed'))
             else:
-                st.error(I18n.t('error_loading_assistants', error=error_message))
+                st.error(I18n.t('error_loading_assistants', error=error_str))
             
             st.info(I18n.t('check_ragflow_connection'))
         
@@ -124,7 +135,6 @@ def render_sidebar() -> None:
         # Language selection
         I18n.render_language_selector()
                 
-
 
 def render_main_content() -> None:
     """Render the main content area with chat interface and document viewer."""
@@ -159,7 +169,7 @@ def render_main_content() -> None:
         if pdf_cache_key in st.session_state:
             pdf_data = st.session_state[pdf_cache_key]
         elif current_ragflow_doc:
-            # Download PDF from RAGFlow
+            # Download PDF from RAGFlow using SDK
             try:
                 with st.spinner(I18n.t('loading_pdf_from_ragflow')):
                     client = create_client()
@@ -168,17 +178,45 @@ def render_main_content() -> None:
                     doc_id = current_ragflow_doc.get('id')
                     
                     if dataset_id and doc_id:
-                        response = client._make_request('GET', f'/api/v1/datasets/{dataset_id}/documents/{doc_id}')
-                        if response.status_code == 200:
-                            pdf_data = response.content
-                            # Cache the PDF data
-                            st.session_state[pdf_cache_key] = pdf_data
-                            Logger.info(f"Successfully downloaded PDF for {current_file}")
+                        # Use RAGFlow SDK to get the document object and download content
+                        datasets = client.ragflow.list_datasets()
+                        target_dataset = None
+                        for dataset in datasets:
+                            if dataset.id == dataset_id:
+                                target_dataset = dataset
+                                break
+                        
+                        if target_dataset:
+                            documents = target_dataset.list_documents()
+                            target_doc = None
+                            for doc in documents:
+                                if doc.id == doc_id:
+                                    target_doc = doc
+                                    break
+                            
+                            if target_doc:
+                                # Download the document content using SDK
+                                pdf_data = target_doc.download()
+                                
+                                # Validate that we actually got PDF data
+                                if pdf_data and isinstance(pdf_data, bytes) and pdf_data.startswith(b'%PDF'):
+                                    # Cache the PDF data
+                                    st.session_state[pdf_cache_key] = pdf_data
+                                    Logger.info(f"Successfully downloaded PDF for {current_file} using SDK (size: {len(pdf_data)} bytes)")
+                                    
+                                    # Extract page dimensions immediately for annotations
+                                    _extract_page_dimensions_immediately(pdf_data, current_ragflow_doc)
+                                else:
+                                    Logger.error(f"Downloaded data is not a valid PDF (type: {type(pdf_data)}, starts with: {pdf_data[:20] if pdf_data else 'None'})")
+                                    st.error("Downloaded file is not a valid PDF document")
+                            else:
+                                st.error(f"Document {doc_id} not found in dataset")
                         else:
-                            st.error(I18n.t('failed_download_pdf', status_code=response.status_code))
+                            st.error(f"Dataset {dataset_id} not found")
                     else:
                         st.error(I18n.t('document_dataset_id_not_available'))
             except Exception as e:
+                Logger.error(f"Error downloading PDF using SDK: {str(e)}")
                 st.error(I18n.t('error_downloading_pdf', error=str(e)))
         
         if pdf_data:
@@ -195,11 +233,15 @@ def render_main_content() -> None:
                 doc_response = st.session_state.document_responses[current_file]
                 citation_mapping = doc_response.get('citation_mapping', {})
 
+                # Get annotation mode from settings (default to "smart")
+                annotation_mode = st.session_state.get('annotation_mode', 'smart')
+                
                 annotations = create_annotations_from_sources(
                     doc_response['answer'],
                     doc_response['sources'],
                     citation_mapping,
-                    current_file  # Pass current document name to filter sources
+                    current_file,  # Pass current document name to filter sources
+                    annotation_mode  # Pass annotation mode
                 )
                 Logger.info(f"Created {len(annotations)} annotations for document {current_file}")
             
@@ -315,21 +357,9 @@ def render_main_content() -> None:
                                                         if page_display not in ['N/A', 'Error']:
                                                             st.caption(f"📄 {page_display}")
                                                         
-                                                        # Check if we have multiple annotation snippets
-                                                        annotation_snippets = get_source_annotation_snippets(source)
-                                                        
-                                                        if annotation_snippets and len(annotation_snippets) > 1:
-                                                            # Display individual snippets for each annotation
-                                                            st.markdown(f"**{I18n.t('multiple_text_segments')}:**")
-                                                            for i, snippet in enumerate(annotation_snippets):
-                                                                st.markdown(f"**{I18n.t('segment')} {i+1}** ({I18n.t('page', page=snippet['page'])}):")
-                                                                st.markdown(f"   _{snippet['text']}_")
-                                                                if i < len(annotation_snippets) - 1:
-                                                                    st.markdown("")  # Add spacing between snippets
-                                                        else:
-                                                            # Display single source text as before
-                                                            source_text = format_source_for_display(source)
-                                                            st.markdown(f"   {source_text}")
+                                                        # Always display unified source text
+                                                        source_text = format_source_for_display(source)
+                                                        st.markdown(f"   {source_text}")
                                                         
                                                         st.markdown("---")  # Add separator between sources
                                                         displayed_sources.add(original_source_index)
@@ -374,8 +404,21 @@ def render_main_content() -> None:
             current_ragflow_doc = st.session_state.get('current_ragflow_doc', {})
             current_doc_id = current_ragflow_doc.get('id', '')
             
+            # Check if query generation failed for this document
+            query_failed = current_doc_id in st.session_state.get('query_suggestion_failures', set())
+            
+            if query_failed:
+                # Show failure message and retry button
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    st.warning("⚠️ Query suggestions failed to generate properly")
+                with col2:
+                    if st.button("🔄 Retry", key=f"retry_suggestions_{current_doc_id}", help="Try generating suggestions again"):
+                        retry_query_suggestions(current_doc_id, current_ragflow_doc)
+                        st.rerun()
+            
             # Display query suggestions if available
-            if (
+            elif (
                 'document_query_suggestions' in st.session_state and
                 current_doc_id in st.session_state.get('document_query_suggestions', {}) and
                 st.session_state['document_query_suggestions'][current_doc_id]
@@ -433,3 +476,46 @@ def render_main_content() -> None:
             else:
                 st.info(I18n.t('no_document_selected'))
 
+
+
+def _extract_page_dimensions_immediately(pdf_data: bytes, ragflow_doc: dict):
+    """Extract page dimensions immediately after PDF download."""
+    
+    if not ragflow_doc:
+        return
+    
+    try:
+        # Save PDF to temporary file
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_file:
+            temp_file.write(pdf_data)
+            temp_pdf_path = temp_file.name
+        
+        try:
+            # Extract page dimensions immediately
+            pdf_doc = fitz.open(temp_pdf_path)
+            page_dimensions = {}
+            
+            for page_num in range(len(pdf_doc)):
+                page = pdf_doc[page_num]
+                rect = page.rect
+                page_dimensions[page_num + 1] = {  # 1-based page numbering
+                    'width': float(rect.width),
+                    'height': float(rect.height)
+                }
+            pdf_doc.close()
+            
+            # Store immediately with correct document ID format
+            doc_id = f"ragflow_{ragflow_doc.get('id', '')}"
+            StateManager.store_document_page_dimensions(doc_id, page_dimensions)
+            Logger.info(f"IMMEDIATE: Stored page dimensions for {len(page_dimensions)} pages for {doc_id}")
+            
+        finally:
+            # Clean up temp file
+            import os
+            try:
+                os.unlink(temp_pdf_path)
+            except Exception as e:
+                Logger.warning(f"Failed to cleanup temp file: {e}")
+                
+    except Exception as e:
+        Logger.error(f"Error extracting page dimensions: {e}")

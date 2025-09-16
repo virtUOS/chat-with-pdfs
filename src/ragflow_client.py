@@ -1,21 +1,22 @@
 """
 RAGFlow API Client
 
-A Python client for connecting to the RAGFlow API with environment-based configuration.
+Official RAGFlow SDK wrapper with environment-based configuration.
 """
 
 import os
-import requests
 from typing import Dict, Any, Optional
 from dotenv import load_dotenv
 
+from ragflow_sdk import RAGFlow
+
 
 class RAGFlowClient:
-    """Client for interacting with the RAGFlow API."""
+    """Wrapper for the official RAGFlow SDK with environment configuration."""
     
     def __init__(self, api_key: Optional[str] = None, base_url: Optional[str] = None):
         """
-        Initialize the RAGFlow client.
+        Initialize the RAGFlow client using the official SDK.
         
         Args:
             api_key: RAGFlow API key. If not provided, will load from environment.
@@ -33,212 +34,159 @@ class RAGFlowClient:
         if not self.base_url:
             raise ValueError("RAGFlow base URL is required. Set RAGFLOW_BASE_URL in .env file or pass as parameter.")
         
-        self.session = requests.Session()
-        self.session.headers.update({
-            'Authorization': f'Bearer {self.api_key}',
-            'Content-Type': 'application/json',
-            'User-Agent': 'RAGFlow-Python-Client/1.0.0'
-        })
-    
-    def _make_request(self, method: str, endpoint: str, **kwargs) -> requests.Response:
-        """
-        Make a request to the RAGFlow API.
-        
-        Args:
-            method: HTTP method (GET, POST, PUT, DELETE)
-            endpoint: API endpoint (without base URL)
-            **kwargs: Additional arguments to pass to requests
-            
-        Returns:
-            Response object
-            
-        Raises:
-            requests.RequestException: If the request fails
-        """
-        if not self.base_url:
-            raise ValueError("RAGFlow base URL is not set")
-            
-        url = f"{self.base_url.rstrip('/')}/{endpoint.lstrip('/')}"
-        
-        try:
-            response = self.session.request(method, url, **kwargs)
-            
-            # Handle authentication errors specifically
-            if response.status_code == 401:
-                raise requests.exceptions.HTTPError("Authentication error: API key is invalid!")
-            elif response.status_code == 403:
-                raise requests.exceptions.HTTPError("Authentication error: Access forbidden!")
-                
-            response.raise_for_status()
-            return response
-        except requests.RequestException as e:
-            print(f"Request failed: {e}")
-            raise
+        # Initialize official RAGFlow SDK
+        self.ragflow = RAGFlow(api_key=self.api_key, base_url=self.base_url)
     
     def get_datasets(self) -> Dict[str, Any]:
-        """
-        Get list of datasets (knowledge bases).
-        
-        Returns:
-            Dictionary containing datasets data
-        """
-        response = self._make_request('GET', '/api/v1/datasets')
-        return response.json()
+        """Get list of datasets using official SDK."""
+        dataset_objects = self.ragflow.list_datasets()
+        # Convert DataSet objects to dictionaries
+        result = []
+        for dataset in dataset_objects:
+            result.append({
+                'id': dataset.id,
+                'name': dataset.name,
+                'description': getattr(dataset, 'description', ''),
+                'status': getattr(dataset, 'status', ''),
+                'create_time': getattr(dataset, 'create_time', ''),
+                'update_time': getattr(dataset, 'update_time', '')
+            })
+        return result
     
     def create_dataset(self, name: str, description: str = "", **kwargs) -> Dict[str, Any]:
-        """
-        Create a new dataset (knowledge base).
-        
-        Args:
-            name: Name of the dataset
-            description: Description of the dataset
-            **kwargs: Additional parameters like embedding_model, chunk_method, etc.
-            
-        Returns:
-            Dictionary containing created dataset data
-        """
-        data = {
-            'name': name,
-            'description': description,
-            **kwargs
-        }
-        response = self._make_request('POST', '/api/v1/datasets', json=data)
-        return response.json()
+        """Create a new dataset using official SDK."""
+        response = self.ragflow.create_dataset(name=name, description=description, **kwargs)
+        return response
     
     def upload_document(self, dataset_id: str, file_path: str) -> Dict[str, Any]:
-        """
-        Upload a document to a dataset.
-        
-        Args:
-            dataset_id: ID of the dataset
-            file_path: Path to the file to upload
-            
-        Returns:
-            Dictionary containing upload result
-        """
+        """Upload a document using official SDK."""
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"File not found: {file_path}")
-        
-        with open(file_path, 'rb') as file:
-            files = {'file': file}
-            
-            # Remove Content-Type header for file uploads
-            headers = dict(self.session.headers)
-            headers.pop('Content-Type', None)
-            
-            response = self._make_request(
-                'POST',
-                f'/api/v1/datasets/{dataset_id}/documents',
-                files=files,
-                headers=headers
-            )
-            return response.json()
+        with open(file_path, 'rb') as f:
+            files = {'file': f}
+            response = self.ragflow.post(f'/api/v1/datasets/{dataset_id}/documents', files=files)
+        return response.json()
     
     def retrieve_chunks(self, dataset_ids: list, question: str, **kwargs) -> Dict[str, Any]:
-        """
-        Retrieve chunks from datasets.
-        
-        Args:
-            dataset_ids: List of dataset IDs to search
-            question: Question to ask
-            **kwargs: Additional parameters like top_k, similarity_threshold, etc.
-            
-        Returns:
-            Dictionary containing retrieval results
-        """
-        data = {
-            'dataset_ids': dataset_ids,
-            'question': question,
-            **kwargs
-        }
-        response = self._make_request('POST', '/api/v1/retrieval', json=data)
-        return response.json()
+        """Retrieve chunks using official SDK."""
+        response = self.ragflow.retrieve(dataset_ids=dataset_ids, question=question, **kwargs)
+        return response
     
     def get_documents(self, dataset_id: str, **kwargs) -> Dict[str, Any]:
-        """
-        Get documents in a dataset.
+        """Get documents using official SDK."""
+        # Find the dataset by ID and use its list_documents method
+        datasets = self.ragflow.list_datasets()
+        for dataset in datasets:
+            if dataset.id == dataset_id:
+                document_objects = dataset.list_documents()
+                # Convert Document objects to dictionaries
+                result = []
+                for doc in document_objects:
+                    result.append({
+                        'id': doc.id,
+                        'name': doc.name,
+                        'dataset_id': doc.dataset_id,
+                        'type': getattr(doc, 'type', ''),
+                        'size': getattr(doc, 'size', 0),
+                        'status': getattr(doc, 'status', ''),
+                        'chunk_count': getattr(doc, 'chunk_count', 0),
+                        'token_count': getattr(doc, 'token_count', 0),
+                    })
+                return {'code': 0, 'data': {'docs': result}}
         
-        Args:
-            dataset_id: ID of the dataset
-            **kwargs: Additional query parameters like page, page_size, etc.
-            
-        Returns:
-            Dictionary containing documents data
-        """
-        params = kwargs
-        response = self._make_request('GET', f'/api/v1/datasets/{dataset_id}/documents', params=params)
-        return response.json()
+        # Dataset not found
+        return {'code': 100, 'data': None, 'message': f'Dataset {dataset_id} not found'}
     
     def delete_documents(self, dataset_id: str, document_ids: Optional[list] = None) -> Dict[str, Any]:
-        """
-        Delete documents from a dataset.
-        
-        Args:
-            dataset_id: ID of the dataset
-            document_ids: List of document IDs to delete (if None, deletes all)
-            
-        Returns:
-            Dictionary containing deletion result
-        """
+        """Delete documents using official SDK."""
         data = {'ids': document_ids} if document_ids else {}
-        response = self._make_request('DELETE', f'/api/v1/datasets/{dataset_id}/documents', json=data)
+        response = self.ragflow.delete(f'/api/v1/datasets/{dataset_id}/documents', json=data)
         return response.json()
     
     def create_chat_assistant(self, name: str, dataset_ids: list, **kwargs) -> Dict[str, Any]:
-        """
-        Create a chat assistant.
-        
-        Args:
-            name: Name of the chat assistant
-            dataset_ids: List of dataset IDs to associate
-            **kwargs: Additional parameters like llm, prompt, etc.
-            
-        Returns:
-            Dictionary containing created chat assistant data
-        """
-        data = {
-            'name': name,
-            'dataset_ids': dataset_ids,
-            **kwargs
-        }
-        response = self._make_request('POST', '/api/v1/chats', json=data)
-        return response.json()
+        """Create a chat assistant using official SDK."""
+        response = self.ragflow.create_chat(name=name, dataset_ids=dataset_ids, **kwargs)
+        return response
     
     def get_chat_assistants(self, **kwargs) -> Dict[str, Any]:
-        """
-        Get list of chat assistants.
-        
-        Args:
-            **kwargs: Query parameters like page, page_size, etc.
-            
-        Returns:
-            Dictionary containing chat assistants data
-        """
-        response = self._make_request('GET', '/api/v1/chats', params=kwargs)
-        return response.json()
+        """Get list of chat assistants using official SDK."""
+        chat_objects = self.ragflow.list_chats(**kwargs)
+        # Convert Chat objects to dictionaries
+        result = []
+        for chat in chat_objects:
+            result.append({
+                'id': chat.id,
+                'name': chat.name,
+                'description': getattr(chat, 'description', ''),
+                'datasets': getattr(chat, 'datasets', []),
+                'dataset_ids': getattr(chat, 'dataset_ids', []),
+                'status': getattr(chat, 'status', ''),
+                'create_time': getattr(chat, 'create_time', ''),
+                'update_time': getattr(chat, 'update_time', '')
+            })
+        return result
     
     def chat_completion(self, chat_id: str, question: str, stream: bool = True, **kwargs) -> Dict[str, Any]:
-        """
-        Chat with an assistant.
+        """Chat with an assistant using official SDK."""
+        # Find the chat object by ID
+        chat_objects = self.ragflow.list_chats()
+        target_chat = None
+        for chat in chat_objects:
+            if chat.id == chat_id:
+                target_chat = chat
+                break
         
-        Args:
-            chat_id: ID of the chat assistant
-            question: Question to ask
-            stream: Whether to stream the response
-            **kwargs: Additional parameters like session_id
-            
-        Returns:
-            Dictionary containing chat response
-        """
-        data = {
-            'question': question,
-            'stream': stream,
-            **kwargs
-        }
-        response = self._make_request('POST', f'/api/v1/chats/{chat_id}/completions', json=data)
-        return response.json()
+        if not target_chat:
+            raise ValueError(f"Chat {chat_id} not found")
+        
+        # Always create new session to avoid SDK bugs
+        session_obj = target_chat.create_session()
+        session_id = session_obj.id
+        
+        # Use session.ask method with stream=True to avoid SDK bugs
+        # Use session.ask with stream=True (works and provides references)
+        response_gen = session_obj.ask(question, stream=True)
+        
+        # Consume all responses to get the final complete one
+        final_response = None
+        for message in response_gen:
+            final_response = message  # Keep updating to get the final complete response
+            final_response = message
+        if final_response:
+            return {
+                "code": 0,
+                "data": {
+                    "answer": final_response.content,
+                    "session_id": session_id,
+                    "reference": {
+                        "chunks": final_response.reference
+                    }
+                }
+            }
+        else:
+            return {
+                "code": 1,
+                "message": "No response received",
+                "data": None
+            }
     
-
+    def _make_request(self, method: str, endpoint: str, **kwargs):
+        """
+        Backward compatibility method for direct API access.
+        Use this only when the official SDK doesn't provide the required functionality.
+        """
+        # HTTP methods always return Response objects
+        if method.upper() == 'GET':
+            return self.ragflow.get(endpoint, **kwargs)
+        elif method.upper() == 'POST':
+            return self.ragflow.post(endpoint, **kwargs)
+        elif method.upper() == 'PUT':
+            return self.ragflow.put(endpoint, **kwargs)
+        elif method.upper() == 'DELETE':
+            return self.ragflow.delete(endpoint, **kwargs)
+        else:
+            raise ValueError(f"Unsupported HTTP method: {method}")
+    
 
 def create_client() -> RAGFlowClient:
     """

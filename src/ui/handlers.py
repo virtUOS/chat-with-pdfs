@@ -5,7 +5,7 @@ Event handlers for the Chat with Docs application UI.
 import streamlit as st
 
 from ..utils.logger import Logger
-from ..utils.source import extract_citation_indices
+from ..utils.citations import extract_citation_indices
 from ..core.ragflow_chat_engine import RAGFlowChatEngine
 
 

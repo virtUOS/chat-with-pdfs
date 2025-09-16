@@ -357,6 +357,25 @@ class RAGFlowDocumentManager:
         # Convert to unified images format
         all_unified_images = []
         
+        # Extract page dimensions for annotation boundary validation
+        page_dimensions = {}
+        try:
+            pdf_doc = fitz.open(pdf_path)
+            for page_num in range(len(pdf_doc)):
+                page = pdf_doc[page_num]
+                rect = page.rect
+                page_dimensions[page_num + 1] = {  # 1-based page numbering
+                    'width': float(rect.width),
+                    'height': float(rect.height)
+                }
+            pdf_doc.close()
+            Logger.info(f"Extracted page dimensions for {len(page_dimensions)} pages")
+            Logger.info(f"DEBUG: Sample page dimensions - Page 1: {page_dimensions.get(1, 'Not found')}")
+            Logger.info(f"DEBUG: All page numbers: {list(page_dimensions.keys())}")
+        except Exception as e:
+            Logger.warning(f"Could not extract page dimensions: {e}")
+            page_dimensions = {}
+        
         for document in docs:
             page_num = document.get('metadata', {}).get('page')
             text_len = len(document.get('text', ''))
@@ -538,6 +557,12 @@ class RAGFlowDocumentManager:
         # Store the image paths for this document using StateManager
         StateManager.store_document_image_map(doc_id, image_paths)
         Logger.info(f"Stored {len(image_paths)} image paths for document {doc_id}")
+        
+        # Store page dimensions for annotation boundary validation
+        if page_dimensions:
+            StateManager.store_document_page_dimensions(doc_id, page_dimensions)
+            Logger.info(f"Stored page dimensions for {len(page_dimensions)} pages for document {doc_id}")
+            Logger.info(f"DEBUG: Verifying storage - retrieved back: {len(StateManager.get_document_page_dimensions(doc_id))} pages")
         
         # Also store the unified image metadata with captions
         if all_unified_images:

@@ -2,6 +2,7 @@
 RAGFlow-based query engine and response synthesis for the Chat with Docs application.
 """
 import re
+import time
 
 import streamlit as st
 from typing import Dict, Any, List
@@ -130,7 +131,6 @@ class RAGFlowChatEngine:
             Logger.info(f"RAGFlow request details: {request_info}")
             
             # Execute query with RAGFlow using the scoped prompt
-            import time
             start_time = time.time()
             
             response = chat_engine.client.chat_completion(
@@ -150,13 +150,31 @@ class RAGFlowChatEngine:
             answer = data.get('answer', '')
             reference = data.get('reference', {})
             
+            # Clean up answer by removing RAGFlow fallback messages ONLY if there's substantial content before it
+            if answer:
+                fallback_message = "The answer you are looking for is not found in the knowledge base!"
+                
+                # Check if the answer contains the fallback message
+                if fallback_message in answer:
+                    # Split the answer at the fallback message
+                    parts = answer.split(fallback_message)
+                    if len(parts) > 1:
+                        # Get the content before the fallback message
+                        content_before = parts[0].strip()
+                        
+                        # Only remove the fallback if there's substantial content (more than just whitespace/newlines)
+                        if content_before and len(content_before) > 10:  # Arbitrary threshold for "substantial"
+                            answer = content_before
+                            Logger.info(f"Removed RAGFlow fallback message, kept substantial content ({len(content_before)} chars)")
+                        # If there's no substantial content before the fallback, keep the original answer
+            
             # Enhanced logging with more diagnostic information
+            Logger.warning(f"RAGFlow RAW response: {response}")
             Logger.info(f"RAGFlow response - Answer length: {len(answer)}, Found {len(reference.get('chunks', []))} source chunks, Response time: {response_time:.2f}s")
             Logger.info(f"RAGFlow response keys: {list(data.keys())}")
             Logger.info(f"Reference keys: {list(reference.keys()) if reference else 'No reference object'}")
             
             # Enhanced citation and reference analysis
-            import re
             citation_matches = re.findall(r'\[ID:(\d+)\]', answer)
             citation_ids = list(set(citation_matches))  # unique citation IDs
             has_citations = len(citation_ids) > 0
@@ -202,8 +220,6 @@ class RAGFlowChatEngine:
                 Logger.info(f"Sample chunk info: {chunk_info}")
             else:
                 Logger.warning(f"RAGFlow unusual case: {len(reference.get('chunks', []))} chunks without citations")
-            
-            chunks = reference.get('chunks', [])
             
             # Update session ID if provided
             if data.get('session_id'):
