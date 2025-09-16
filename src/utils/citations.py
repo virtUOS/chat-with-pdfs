@@ -7,7 +7,7 @@ import re
 def extract_citation_indices(answer_text: str):
     """
     Extract citation indices from the answer text.
-    Only supports RAGFlow format [ID:X].
+    Supports RAGFlow formats: [ID:X] and [ID:X, ID:Y].
     
     Args:
         answer_text: The text to extract citation indices from
@@ -15,9 +15,13 @@ def extract_citation_indices(answer_text: str):
     Returns:
         A list of integers representing the citation indices
     """
-    # Extract RAGFlow format [ID:X] citations
-    ragflow_citations = re.findall(r'\[ID:(\d+)\]', answer_text)
-    return [int(x) for x in ragflow_citations]
+    # Find all ID: patterns regardless of bracket format
+    # This handles both [ID:1] and [ID:2, ID:3] formats
+    citation_matches = re.findall(r'ID:(\d+)', answer_text)
+    citation_ids = [int(x) for x in citation_matches]
+    
+    # Remove duplicates and return sorted list
+    return sorted(list(set(citation_ids)))
 
 
 def is_source_from_current_document(source, current_document_name):

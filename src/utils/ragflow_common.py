@@ -500,8 +500,8 @@ def _parse_query_suggestions(response_text: str) -> list:
         clean = re.sub(r'^[\d\.\-\*\•\s]+', '', suggestion).strip()
         clean = clean.strip('"\'')
         
-        # Remove RAGFlow citations like [ID:0], [ID:1], etc.
-        clean = re.sub(r'\s*\[ID:\d+\]', '', clean)
+        # Remove RAGFlow citations like [ID:0], [ID:1], [ID:2, ID:3], etc.
+        clean = re.sub(r'\s*\[ID:[0-9,\s]+\]', '', clean)
         
         if clean and len(clean) > 5:  # Must be substantial
             cleaned_suggestions.append(clean)

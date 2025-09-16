@@ -176,8 +176,9 @@ class RAGFlowChatEngine:
             Logger.info(f"Reference keys: {list(reference.keys()) if reference else 'No reference object'}")
             
             # Enhanced citation and reference analysis
-            citation_matches = re.findall(r'\[ID:(\d+)\]', answer)
-            citation_ids = list(set(citation_matches))  # unique citation IDs
+            from ..utils.citations import extract_citation_indices
+            citation_ids = [str(cid) for cid in extract_citation_indices(answer)]
+            citation_matches = citation_ids  # For backwards compatibility with logging
             has_citations = len(citation_ids) > 0
             has_chunks = len(chunks) > 0
             
