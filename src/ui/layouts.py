@@ -238,7 +238,7 @@ def render_main_content() -> None:
                 # Get annotation mode from settings (default to "smart")
                 annotation_mode = st.session_state.get('annotation_mode', 'smart')
                 
-                annotations = create_annotations_from_sources(
+                annotations, citation_to_annotation_mapping = create_annotations_from_sources(
                     doc_response['answer'],
                     doc_response['sources'],
                     citation_mapping,
@@ -246,6 +246,9 @@ def render_main_content() -> None:
                     annotation_mode  # Pass annotation mode
                 )
                 Logger.info(f"Created {len(annotations)} annotations for document {current_file}")
+                
+                # Store the mapping for scroll functionality
+                st.session_state['citation_to_annotation_mapping'] = citation_to_annotation_mapping
             
             # Create PDF viewer component with responsive height
             screen_height = streamlit_js_eval(js_expressions='screen.height', key='pdf_screen_height')
@@ -258,13 +261,21 @@ def render_main_content() -> None:
                 Logger.info(f"Annotation clicked on page {page}")
                 # No further action required
             
+            # Get scroll to annotation from session state
+            scroll_to_annotation = st.session_state.get('scroll_to_annotation', None)
+            
             pdf_viewer(
                 pdf_data,
                 height=pdf_height,
                 annotations=annotations,
                 annotation_outline_size=5,  # Make outlines more visible
-                on_annotation_click=annotation_click_handler
+                on_annotation_click=annotation_click_handler,
+                scroll_to_annotation=scroll_to_annotation
             )
+            
+            # Debug logging
+            if scroll_to_annotation is not None:
+                Logger.info(f"PDF viewer rendered with scroll_to_annotation={scroll_to_annotation}")
         else:
             st.info(I18n.t('pdf_loading'))
     
@@ -325,7 +336,15 @@ def render_main_content() -> None:
                                             # Color mapping that matches annotation colors
                                             color_options = ["lightcoral", "lightblue", "lightgreen", "lightsalmon", "plum"]
                                             
+                                            # Use the real citation-to-annotation mapping from annotation creation
+                                            citation_to_annotation_pos = st.session_state.get('citation_to_annotation_mapping', {})
+                                            
                                             for idx, citation_num in enumerate(sorted_citations):
+                                                # Use the original citation number from RAGFlow (ID:0 -> 0, ID:1 -> 1, etc.)
+                                                display_num = citation_num
+                                                
+                                                # Debug: Log the mapping
+                                                Logger.info(f"Citation mapping: original_id={citation_num}, display_num={display_num}, annotation_pos={citation_to_annotation_pos.get(citation_num)}")
                                                 # Get the original source index from the mapping
                                                 if str(citation_num) in msg["citation_mapping"]:
                                                     original_source_index = msg["citation_mapping"][str(citation_num)]
@@ -358,15 +377,36 @@ def render_main_content() -> None:
                                                             doc_name = 'Unknown Document'
                                                             similarity = 0.0
                                                         
-                                                        # Get the color that matches the annotation
+                                                        # Get the color that matches the annotation (use citation_num for consistency)
                                                         source_color = color_options[citation_num % len(color_options)]
                                                         
-                                                        # Create a colored container for the source
-                                                        st.markdown(f"""
-                                                        <div style="border-left: 4px solid {source_color}; padding-left: 12px; margin: 8px 0;">
-                                                            <strong>{citation_num}. {doc_name}</strong> (similarity: {similarity:.3f})
-                                                        </div>
-                                                        """, unsafe_allow_html=True)
+                                                        # Create header with citation info and scroll button
+                                                        header_col1, header_col2 = st.columns([4, 1])
+                                                        
+                                                        with header_col1:
+                                                            # Create a colored container for the source
+                                                            st.markdown(f"""
+                                                            <div style="border-left: 4px solid {source_color}; padding-left: 12px; margin: 8px 0;">
+                                                                <strong>{display_num}. {doc_name}</strong> (similarity: {similarity:.3f})
+                                                            </div>
+                                                            """, unsafe_allow_html=True)
+                                                        
+                                                        with header_col2:
+                                                            # Add button to scroll to this annotation
+                                                            # Get the stored mapping from session state (created during annotation generation)
+                                                            stored_mapping = st.session_state.get('citation_to_annotation_mapping', {})
+                                                            annotation_positions = stored_mapping.get(citation_num, [])
+                                                            annotation_position = annotation_positions[0] if annotation_positions else None
+                                                            
+                                                            if annotation_position and st.button("📍", key=f"scroll_to_{citation_num}_{original_source_index}",
+                                                                        help=I18n.t('scroll_to_annotation', citation=display_num)):
+                                                                # Set the annotation position to scroll to (1-indexed)
+                                                                Logger.info(f"Button clicked: citation_num={citation_num}, display_num={display_num}, annotation_position={annotation_position}")
+                                                                Logger.info(f"Citation has {len(annotation_positions)} annotations at positions: {annotation_positions}")
+                                                                Logger.info(f"Using stored mapping: {stored_mapping}")
+                                                                Logger.info(f"Total annotations available: {len(annotations) if 'annotations' in locals() else 'unknown'}")
+                                                                st.session_state.scroll_to_annotation = annotation_position
+                                                                st.rerun()
                                                         
                                                         if page_display not in ['N/A', 'Error']:
                                                             st.caption(f"📄 {page_display}")

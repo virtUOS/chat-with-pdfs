@@ -24,25 +24,27 @@ def create_annotations_from_sources(answer_text, sources, citation_mapping=None,
             - "off": No annotations
         
     Returns:
-        A list of annotation dictionaries
+        A tuple of (annotations_list, citation_to_annotation_mapping)
+        where citation_to_annotation_mapping maps citation_num -> [annotation_positions]
     """
     if annotation_mode == "off":
-        return []
+        return [], {}
         
     citations = extract_citation_indices(answer_text)
     if not citations:
-        return []
+        return [], {}
     
     # Deduplicate citations to avoid creating multiple annotations for the same source
-    unique_citations = list(set(citations))
+    unique_citations = sorted(list(set(citations)))
     
     annotations = []
+    citation_to_annotation_mapping = {}
 
-    for idx in unique_citations:
+    for citation_idx in unique_citations:
         # Use citation mapping if provided
         source_index = None
-        if citation_mapping and str(idx) in citation_mapping:
-            source_index = citation_mapping[str(idx)]
+        if citation_mapping and str(citation_idx) in citation_mapping:
+            source_index = citation_mapping[str(citation_idx)]
         else:
             continue  # Skip if no mapping available
         
@@ -51,20 +53,29 @@ def create_annotations_from_sources(answer_text, sources, citation_mapping=None,
             
             # Only create annotations for sources from the current document
             if current_document_name and is_source_from_current_document(source, current_document_name):
-                # Create annotations based on mode
+                # Track starting position for this citation
+                start_annotation_pos = len(annotations)
+                
+                # Create annotations based on mode - use original citation_idx for consistency
                 if annotation_mode == "minimal":
-                    ragflow_annotations = _create_minimal_annotations(source, idx, answer_text)
+                    ragflow_annotations = _create_minimal_annotations(source, citation_idx, answer_text)
                 elif annotation_mode == "detailed":
-                    ragflow_annotations = _create_detailed_annotations(source, idx, answer_text)
+                    ragflow_annotations = _create_detailed_annotations(source, citation_idx, answer_text)
                 else:  # "smart" mode (default)
-                    ragflow_annotations = _create_ragflow_position_annotations(source, idx, answer_text)
+                    ragflow_annotations = _create_ragflow_position_annotations(source, citation_idx, answer_text)
                 
                 if ragflow_annotations:
                     annotations.extend(ragflow_annotations)
+                    
+                    # Map this citation to its annotation positions (1-indexed for streamlit-pdf-viewer)
+                    annotation_positions = []
+                    for i in range(len(ragflow_annotations)):
+                        annotation_positions.append(start_annotation_pos + i + 1)
+                    citation_to_annotation_mapping[citation_idx] = annotation_positions
         else:
             continue  # Source index out of range
     
-    return annotations
+    return annotations, citation_to_annotation_mapping
 
 
 def _create_ragflow_position_annotations(source, citation_idx, answer_text):
@@ -74,7 +85,7 @@ def _create_ragflow_position_annotations(source, citation_idx, answer_text):
     
     Args:
         source: Source object with RAGFlow metadata
-        citation_idx: Citation index number
+        citation_idx: Citation index number (display number, starting from 1)
         answer_text: Answer text for citation format detection
         
     Returns:
@@ -88,8 +99,8 @@ def _create_ragflow_position_annotations(source, citation_idx, answer_text):
     if not positions:
         return None
     
-    # Determine citation format
-    citation_format = f"[ID:{citation_idx}]" if "[ID:" in answer_text else f"[{citation_idx}]"
+    # Use simple citation format with display number
+    citation_format = f"[{citation_idx}]"
     
     try:
         # First, collect and validate all positions
@@ -226,7 +237,7 @@ def _create_minimal_annotations(source, citation_idx, answer_text):
                         best_position = validated_pos
         
         if best_position:
-            color_options = ["red", "blue", "green", "orange", "purple"]
+            color_options = ["lightcoral", "lightblue", "lightgreen", "lightsalmon", "plum"]
             return [{
                 **best_position,
                 "color": color_options[citation_idx % len(color_options)],
