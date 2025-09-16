@@ -3,8 +3,6 @@ UI layouts for the Chat with Docs application.
 """
 
 import os
-import tempfile
-import fitz
 import streamlit as st
 from streamlit_pdf_viewer import pdf_viewer
 from streamlit_js_eval import streamlit_js_eval
@@ -22,6 +20,11 @@ from .components import (
     display_ragflow_document_info, display_ragflow_document_images,
 )
 from .handlers import handle_query_submission
+from .layout_state_manager import LayoutStateManager
+from .layout_components.pdf_utils import calculate_pdf_height, extract_page_dimensions_immediately
+from .layout_components.annotation_handler import create_annotation_click_handler, create_annotations_for_document
+from .layout_components.query_suggestions import render_query_suggestions
+from .layout_components.source_citations import render_source_citations
 
 def render_sidebar() -> None:
     """Render the sidebar with chat assistant selection and knowledge base documents."""
@@ -207,7 +210,7 @@ def render_main_content() -> None:
                                     Logger.info(f"Successfully downloaded PDF for {current_file} using SDK (size: {len(pdf_data)} bytes)")
                                     
                                     # Extract page dimensions immediately for annotations
-                                    _extract_page_dimensions_immediately(pdf_data, current_ragflow_doc)
+                                    extract_page_dimensions_immediately(pdf_data, current_ragflow_doc)
                                 else:
                                     Logger.error(f"Downloaded data is not a valid PDF (type: {type(pdf_data)}, starts with: {pdf_data[:20] if pdf_data else 'None'})")
                                     st.error("Downloaded file is not a valid PDF document")
@@ -223,46 +226,17 @@ def render_main_content() -> None:
         
         if pdf_data:
             # Get annotations for this document's chat history
-            annotations = []
-            
-            # Check if we have a document-specific response with sources and answer
-            if (current_file in st.session_state.get('document_responses', {}) and
-                st.session_state.document_responses[current_file] and
-                'sources' in st.session_state.document_responses[current_file] and
-                'answer' in st.session_state.document_responses[current_file]):
-                                
-                # Create annotations based on the document-specific response
-                doc_response = st.session_state.document_responses[current_file]
-                citation_mapping = doc_response.get('citation_mapping', {})
-
-                # Get annotation mode from settings (default to "smart")
-                annotation_mode = st.session_state.get('annotation_mode', 'smart')
-                
-                annotations, citation_to_annotation_mapping = create_annotations_from_sources(
-                    doc_response['answer'],
-                    doc_response['sources'],
-                    citation_mapping,
-                    current_file,  # Pass current document name to filter sources
-                    annotation_mode  # Pass annotation mode
-                )
-                Logger.info(f"Created {len(annotations)} annotations for document {current_file}")
-                
-                # Store the mapping for scroll functionality
-                st.session_state['citation_to_annotation_mapping'] = citation_to_annotation_mapping
+            annotations, citation_to_annotation_mapping = create_annotations_for_document(current_file)
             
             # Create PDF viewer component with responsive height
             screen_height = streamlit_js_eval(js_expressions='screen.height', key='pdf_screen_height')
-            pdf_height = int(screen_height * 0.8) if screen_height else 900  # Increased height
+            pdf_height = calculate_pdf_height(screen_height)
 
-            # Define a simple annotation click handler
-            def annotation_click_handler(annotation):
-                """Handle clicks on source annotations in the PDF viewer."""
-                page = annotation.get('page', 'unknown')
-                Logger.info(f"Annotation clicked on page {page}")
-                # No further action required
+            # Create annotation click handler
+            annotation_click_handler = create_annotation_click_handler()
             
             # Get scroll to annotation from session state
-            scroll_to_annotation = st.session_state.get('scroll_to_annotation', None)
+            scroll_to_annotation = LayoutStateManager.get_scroll_to_annotation()
             
             pdf_viewer(
                 pdf_data,
@@ -283,30 +257,27 @@ def render_main_content() -> None:
     screen_height = streamlit_js_eval(js_expressions='screen.height', key='screen_height')
     main_container_dimensions = st_dimensions(key="main")
     
-    # Reserve space for chat input and suggestions - reduce chat container height significantly
-    # This ensures the chat input is always visible
-    height_column_container = int(screen_height * 0.35) if main_container_dimensions else 300
+    # Calculate container heights using state manager
+    height_column_container = LayoutStateManager.get_chat_container_height(screen_height if main_container_dimensions else None)
     
     # Tabbed content in the right column
     with content_column:
         # Create tabs
         chat_tab, info_tab, images_tab = st.tabs([I18n.t('chat'), I18n.t('document_info'), I18n.t('images')])
 
-        # Calculate images container height (0.6 * screen_height)
-        images_container_height = int(screen_height * 0.4) if main_container_dimensions else 500
+        # Calculate images container height using state manager
+        images_container_height = LayoutStateManager.get_images_container_height(screen_height if main_container_dimensions else None)
 
         # Chat tab - contains the chat interface
         with chat_tab:
             # Add clear chat button above the chat container
-            current_file = st.session_state.get('current_file')
-            has_chat_history = (current_file and
-                               current_file in st.session_state.get('chat_history', {}) and
-                               len(st.session_state.chat_history[current_file]) > 0)
+            current_file = LayoutStateManager.get_current_file()
+            has_chat_history = LayoutStateManager.has_chat_history(current_file) if current_file else False
             
-            if has_chat_history:
+            if has_chat_history and current_file:
                 if st.button(I18n.t('clear_chat'), key="clear_chat_main", help=I18n.t('clear_chat_help')):
                     # Reset chat history for current file
-                    st.session_state.chat_history[current_file] = []
+                    LayoutStateManager.clear_chat_history(current_file)
                     st.rerun()
             
             # Create a scrollable container for chat with reduced height to ensure input visibility
@@ -314,206 +285,59 @@ def render_main_content() -> None:
 
             # Display chat history
             with chat_container:
-                if current_file in st.session_state.chat_history:
-                    for msg in st.session_state.chat_history[current_file]:
-                        with st.chat_message(msg["role"]):
-                            st.markdown(msg["content"])
+                chat_history = LayoutStateManager.get_chat_history(current_file) if current_file else []
+                for msg in chat_history:
+                    with st.chat_message(msg["role"]):
+                        st.markdown(msg["content"])
 
-                            # Get citation numbers for this message
-                            citation_numbers = msg.get("citations", [])
-                            
-                            # We only want to display the sources for the citations present in the answer.
-                            if citation_numbers:
-                                # Display sources if this is an assistant message with sources
-                                if msg["role"] == "assistant" and msg.get("sources"):
-                                    with st.expander(I18n.t('show_sources')):
-                                        # Only display sources that are actually cited in the response
-                                        displayed_sources = set()
-                                        
-                                        # Only proceed if we have a citation mapping
-                                        if "citation_mapping" in msg:
-                                            sorted_citations = sorted(citation_numbers)
-                                            # Color mapping that matches annotation colors
-                                            color_options = ["lightcoral", "lightblue", "lightgreen", "lightsalmon", "plum"]
+                        # Display source citations for this message
+                        render_source_citations(msg)
                                             
-                                            # Use the real citation-to-annotation mapping from annotation creation
-                                            citation_to_annotation_pos = st.session_state.get('citation_to_annotation_mapping', {})
-                                            
-                                            for idx, citation_num in enumerate(sorted_citations):
-                                                # Use the original citation number from RAGFlow (ID:0 -> 0, ID:1 -> 1, etc.)
-                                                display_num = citation_num
-                                                
-                                                # Debug: Log the mapping
-                                                Logger.info(f"Citation mapping: original_id={citation_num}, display_num={display_num}, annotation_pos={citation_to_annotation_pos.get(citation_num)}")
-                                                # Get the original source index from the mapping
-                                                if str(citation_num) in msg["citation_mapping"]:
-                                                    original_source_index = msg["citation_mapping"][str(citation_num)]
-                                                    
-                                                    if original_source_index in displayed_sources:
-                                                        continue  # Skip if already displayed this source
-                                                    
-                                                    if original_source_index < len(msg["sources"]):
-                                                        # Get the source using the original index
-                                                        source = msg["sources"][original_source_index]
-                                                        
-                                                        try:
-                                                            full_text = getattr(source, 'text', '')
-                                                            Logger.info(f"Full source text (len={len(full_text)}): {full_text[:500].replace('\n', ' ')}")
-                                                        except Exception as e:
-                                                            Logger.warning(f"Error logging full source text: {e}")
-                                                        
-                                                        # Extract all page numbers that this source spans
-                                                        try:
-                                                            page_numbers = get_source_page_numbers_for_display(source)
-                                                            page_display = format_page_numbers_for_display(page_numbers)
-                                                        except Exception:
-                                                            page_display = 'Error'
-                                                        
-                                                        # Get document name and similarity for nice display
-                                                        if isinstance(source, dict):
-                                                            doc_name = source.get('metadata', {}).get('document_name', 'Unknown Document')
-                                                            similarity = source.get('metadata', {}).get('similarity', 0.0)
-                                                        else:
-                                                            doc_name = 'Unknown Document'
-                                                            similarity = 0.0
-                                                        
-                                                        # Get the color that matches the annotation (use citation_num for consistency)
-                                                        source_color = color_options[citation_num % len(color_options)]
-                                                        
-                                                        # Create header with citation info and scroll button
-                                                        header_col1, header_col2 = st.columns([4, 1])
-                                                        
-                                                        with header_col1:
-                                                            # Create a colored container for the source
-                                                            st.markdown(f"""
-                                                            <div style="border-left: 4px solid {source_color}; padding-left: 12px; margin: 8px 0;">
-                                                                <strong>{display_num}. {doc_name}</strong> (similarity: {similarity:.3f})
-                                                            </div>
-                                                            """, unsafe_allow_html=True)
-                                                        
-                                                        with header_col2:
-                                                            # Add button to scroll to this annotation
-                                                            # Get the stored mapping from session state (created during annotation generation)
-                                                            stored_mapping = st.session_state.get('citation_to_annotation_mapping', {})
-                                                            annotation_positions = stored_mapping.get(citation_num, [])
-                                                            annotation_position = annotation_positions[0] if annotation_positions else None
-                                                            
-                                                            if annotation_position and st.button("📍", key=f"scroll_to_{citation_num}_{original_source_index}",
-                                                                        help=I18n.t('scroll_to_annotation', citation=display_num)):
-                                                                # Set the annotation position to scroll to (1-indexed)
-                                                                Logger.info(f"Button clicked: citation_num={citation_num}, display_num={display_num}, annotation_position={annotation_position}")
-                                                                Logger.info(f"Citation has {len(annotation_positions)} annotations at positions: {annotation_positions}")
-                                                                Logger.info(f"Using stored mapping: {stored_mapping}")
-                                                                Logger.info(f"Total annotations available: {len(annotations) if 'annotations' in locals() else 'unknown'}")
-                                                                st.session_state.scroll_to_annotation = annotation_position
-                                                                st.rerun()
-                                                        
-                                                        if page_display not in ['N/A', 'Error']:
-                                                            st.caption(f"📄 {page_display}")
-                                                        
-                                                        # Always display unified source text
-                                                        source_text = format_source_for_display(source)
-                                                        st.markdown(f"   {source_text}")
-                                                        
-                                                        # Add separator between sources, but not after the last one
-                                                        if idx < len(sorted_citations) - 1:
-                                                            st.markdown("---")  # Add separator between sources
-                                                        displayed_sources.add(original_source_index)
+                        # Display images if present
+                        if msg["role"] == "assistant" and msg.get("images") and len(msg["images"]) > 0:
+                            Logger.info(f"Displaying {len(msg['images'])} images in message")
+                            with st.expander(I18n.t('view_images'), expanded=False):
+                                # Create a grid layout for images (2 columns)
+                                cols = st.columns(2)
+                                for i, img_info in enumerate(msg["images"]):
+                                    with cols[i % 2]:
+                                        try:
+                                            # Check if image exists
+                                            if os.path.exists(img_info['file_path']):
+                                                # Read the image file as binary data
+                                                with open(img_info['file_path'], 'rb') as f:
+                                                    img_bytes = f.read()
+                                                page_num = img_info.get('page', 'unknown')
+                                                meta_caption = img_info.get('caption', '')
+                                                if meta_caption:
+                                                    caption = I18n.t('image_from_page_with_caption', page=page_num, caption=meta_caption)
                                                 else:
-                                                    Logger.warning(f"Citation number {citation_num} not found in mapping")
-                                        else:
-                                            st.warning(I18n.t('citation_mapping_not_available'))
-                                                
-                                # Display images if present
-                                if msg["role"] == "assistant" and msg.get("images") and len(msg["images"]) > 0:
-                                    Logger.info(f"Displaying {len(msg['images'])} images in message")
-                                    with st.expander(I18n.t('view_images'), expanded=False):
-                                        # Create a grid layout for images (2 columns)
-                                        cols = st.columns(2)
-                                        for i, img_info in enumerate(msg["images"]):
-                                            with cols[i % 2]:
-                                                try:
-                                                    # Check if image exists
-                                                    if os.path.exists(img_info['file_path']):
-                                                        # Read the image file as binary data
-                                                        with open(img_info['file_path'], 'rb') as f:
-                                                            img_bytes = f.read()
-                                                        page_num = img_info.get('page', 'unknown')
-                                                        meta_caption = img_info.get('caption', '')
-                                                        if meta_caption:
-                                                            caption = I18n.t('image_from_page_with_caption', page=page_num, caption=meta_caption)
-                                                        else:
-                                                            caption = I18n.t('image_from_page', page=page_num)
-                                                        st.image(img_bytes, caption=caption)
-                                                    else:
-                                                        Logger.warning(f"Image file not found: {img_info['file_path']}")
-                                                        st.warning(f"Image file not found: {os.path.basename(img_info['file_path'])}")
-                                                except Exception as e:
-                                                    Logger.error(f"Error displaying image {img_info['file_path']}: {e}")
-                                                    st.warning(f"Error displaying image: {os.path.basename(img_info['file_path']) if 'file_path' in img_info else 'Unknown'}")
+                                                    caption = I18n.t('image_from_page', page=page_num)
+                                                st.image(img_bytes, caption=caption)
+                                            else:
+                                                Logger.warning(f"Image file not found: {img_info['file_path']}")
+                                                st.warning(f"Image file not found: {os.path.basename(img_info['file_path'])}")
+                                        except Exception as e:
+                                            Logger.error(f"Error displaying image {img_info['file_path']}: {e}")
+                                            st.warning(f"Error displaying image: {os.path.basename(img_info['file_path']) if 'file_path' in img_info else 'Unknown'}")
             
             # Display query suggestions as pills if available
-            # In RAGFlow, we use the document ID from current_ragflow_doc
-            current_ragflow_doc = st.session_state.get('current_ragflow_doc', {})
-            current_doc_id = current_ragflow_doc.get('id', '')
-            
-            # Check if query generation failed for this document
-            query_failed = current_doc_id in st.session_state.get('query_suggestion_failures', set())
-            
-            if query_failed:
-                # Show failure message and retry button
-                col1, col2 = st.columns([3, 1])
-                with col1:
-                    st.warning("⚠️ Query suggestions failed to generate properly")
-                with col2:
-                    if st.button("🔄 Retry", key=f"retry_suggestions_{current_doc_id}", help="Try generating suggestions again"):
-                        retry_query_suggestions(current_doc_id, current_ragflow_doc)
-                        st.rerun()
-            
-            # Display query suggestions if available
-            elif (
-                'document_query_suggestions' in st.session_state and
-                current_doc_id in st.session_state.get('document_query_suggestions', {}) and
-                st.session_state['document_query_suggestions'][current_doc_id]
-            ):
-                # Get suggestions for this document
-                suggestions = st.session_state['document_query_suggestions'][current_doc_id]
-                
-                if suggestions:
-                    # Display suggestions as pills
-                    try:
-                        # Use the help parameter to show the full suggestion text on hover
-                        help_text = I18n.t('available_suggestions') + ":\n" + "\n".join([f"• {suggestion}" for suggestion in suggestions])
-                        
-                        selected_suggestion = st.pills(
-                            label=I18n.t('query_suggestions'),
-                            options=suggestions,
-                            selection_mode="single",
-                            help=help_text
-                        )
-                        
-                        # If a suggestion is selected
-                        if selected_suggestion:
-                            # Use the selected suggestion as the prompt
-                            prompt = selected_suggestion
-                            
-                            # Remove the selected suggestion from the list
-                            suggestions.remove(selected_suggestion)
-                            st.session_state['document_query_suggestions'][current_doc_id] = suggestions
-                            
-                            # Process the suggestion
-                            # Call the query submission handler
-                            if current_file:
-                                handle_query_submission(prompt, current_file, chat_container)
-                            st.rerun()
-                    except Exception as e:
-                        Logger.error(f"Error displaying suggestions: {e}")
+            render_query_suggestions(current_ragflow_doc, chat_container)
                         
             # Chat input
-            user_query = st.chat_input(I18n.t('type_question_here'))
-            if user_query and current_file:
-                handle_query_submission(user_query, current_file, chat_container)
+            # Check if we have a suggested prompt from query suggestions
+            suggested_prompt = st.session_state.get('suggested_prompt', '')
+            if suggested_prompt and current_file:
+                # Process the suggested prompt
+                handle_query_submission(suggested_prompt, current_file, chat_container)
+                # Clear the suggested prompt
+                del st.session_state.suggested_prompt
                 st.rerun()
+            else:
+                user_query = st.chat_input(I18n.t('type_question_here'))
+                if user_query and current_file:
+                    handle_query_submission(user_query, current_file, chat_container)
+                    st.rerun()
         
         # Information tab
         with info_tab:
@@ -530,45 +354,3 @@ def render_main_content() -> None:
                 st.info(I18n.t('no_document_selected'))
 
 
-
-def _extract_page_dimensions_immediately(pdf_data: bytes, ragflow_doc: dict):
-    """Extract page dimensions immediately after PDF download."""
-    
-    if not ragflow_doc:
-        return
-    
-    try:
-        # Save PDF to temporary file
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_file:
-            temp_file.write(pdf_data)
-            temp_pdf_path = temp_file.name
-        
-        try:
-            # Extract page dimensions immediately
-            pdf_doc = fitz.open(temp_pdf_path)
-            page_dimensions = {}
-            
-            for page_num in range(len(pdf_doc)):
-                page = pdf_doc[page_num]
-                rect = page.rect
-                page_dimensions[page_num + 1] = {  # 1-based page numbering
-                    'width': float(rect.width),
-                    'height': float(rect.height)
-                }
-            pdf_doc.close()
-            
-            # Store immediately with correct document ID format
-            doc_id = f"ragflow_{ragflow_doc.get('id', '')}"
-            StateManager.store_document_page_dimensions(doc_id, page_dimensions)
-            Logger.info(f"IMMEDIATE: Stored page dimensions for {len(page_dimensions)} pages for {doc_id}")
-            
-        finally:
-            # Clean up temp file
-            import os
-            try:
-                os.unlink(temp_pdf_path)
-            except Exception as e:
-                Logger.warning(f"Failed to cleanup temp file: {e}")
-                
-    except Exception as e:
-        Logger.error(f"Error extracting page dimensions: {e}")
