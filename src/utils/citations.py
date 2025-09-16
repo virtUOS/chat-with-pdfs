@@ -3,8 +3,6 @@ Citation handling utilities for the Chat with Docs application.
 """
 
 import re
-import streamlit as st
-
 
 def extract_citation_indices(answer_text: str):
     """

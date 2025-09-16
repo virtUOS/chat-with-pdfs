@@ -14,7 +14,6 @@ import pymupdf4llm
 
 from ..config import IMAGES_PATH
 from ..utils.logger import Logger
-from ..utils.i18n import I18n
 from .state_manager import StateManager
 from ..ragflow_client import create_client
 

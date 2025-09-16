@@ -3,7 +3,8 @@ Image extraction and processing for the Chat with Docs application.
 """
 
 import os
-import json
+import re
+import glob
 import streamlit as st
 from .logger import Logger
 from ..config import IMAGES_PATH
@@ -43,7 +44,6 @@ def process_source_for_images(source, current_doc_id, available_images):
     
 
     if text:
-        import re
         image_matches = re.findall(r'!\[\]\(([^)]+)\)', text)
         Logger.info(f"Found {len(image_matches)} Markdown image references in source text")
         for img_path in image_matches:
@@ -51,7 +51,6 @@ def process_source_for_images(source, current_doc_id, available_images):
 
     # Look for the Markdown image syntax: ![](image_path)
     if text:
-        import re
         # Match pattern ![](image_path)
         image_matches = re.findall(r'!\[\]\(([^)]+)\)', text)
         
@@ -66,7 +65,6 @@ def process_source_for_images(source, current_doc_id, available_images):
                 if img_path in available_images:
                     # Direct match - use it as is
                     # Extract actual page number from the image path
-                    import re
                     # Always use the page number from the source metadata, which is the correct context
                     # When the image appears in a source, it should be associated with that source's page
                     page_display = page_num if isinstance(page_num, int) else 1
@@ -78,10 +76,6 @@ def process_source_for_images(source, current_doc_id, available_images):
                     }
                     images.append(image_info)
                     Logger.info(f"Added image from direct Markdown reference: {img_path}")
-    
-    return images
-    
-    # No need for duplicated code - it was removed
     
     return images
 
@@ -122,9 +116,7 @@ def get_document_images(doc_id):
                     Logger.debug(f"Looking for images in document directory: {doc_dir}")
                     
                     if os.path.exists(doc_dir):
-                        # Get images matching the filename pattern
-                        import glob
-                        
+                        # Get images matching the filename pattern                        
                         # Get just the filename from the path (without directories)
                         img_filename = os.path.basename(img_path)
                         

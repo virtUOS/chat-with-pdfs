@@ -2,7 +2,7 @@
 Main annotation creation factory for PDF highlighting.
 """
 
-from .geometry import validate_and_clamp_coordinates, merge_nearby_positions, create_bounding_box
+from .geometry import validate_and_clamp_coordinates, merge_nearby_positions
 from ..citations import extract_citation_indices, is_source_from_current_document
 
 

@@ -12,8 +12,6 @@ from datetime import datetime
 from ..utils.logger import Logger
 from ..utils.i18n import I18n
 from ..utils.prompts import PromptTemplates
-from ..utils.citations import extract_citation_indices
-from ..utils.source_formatting import format_source_for_display, get_source_page_numbers_for_display, format_page_numbers_for_display
 from ..core.state_manager import StateManager
 from ..core.ragflow_chat_engine import RAGFlowChatEngine
 from ..core.ragflow_document_manager import RAGFlowDocumentManager
