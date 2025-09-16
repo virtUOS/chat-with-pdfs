@@ -322,6 +322,9 @@ def render_main_content() -> None:
                                         # Only proceed if we have a citation mapping
                                         if "citation_mapping" in msg:
                                             sorted_citations = sorted(citation_numbers)
+                                            # Color mapping that matches annotation colors
+                                            color_options = ["lightcoral", "lightblue", "lightgreen", "lightsalmon", "plum"]
+                                            
                                             for idx, citation_num in enumerate(sorted_citations):
                                                 # Get the original source index from the mapping
                                                 if str(citation_num) in msg["citation_mapping"]:
@@ -355,8 +358,16 @@ def render_main_content() -> None:
                                                             doc_name = 'Unknown Document'
                                                             similarity = 0.0
                                                         
-                                                        # Display in a nice format like the test script
-                                                        st.markdown(f"**{citation_num}. {doc_name}** (similarity: {similarity:.3f})")
+                                                        # Get the color that matches the annotation
+                                                        source_color = color_options[citation_num % len(color_options)]
+                                                        
+                                                        # Create a colored container for the source
+                                                        st.markdown(f"""
+                                                        <div style="border-left: 4px solid {source_color}; padding-left: 12px; margin: 8px 0;">
+                                                            <strong>{citation_num}. {doc_name}</strong> (similarity: {similarity:.3f})
+                                                        </div>
+                                                        """, unsafe_allow_html=True)
+                                                        
                                                         if page_display not in ['N/A', 'Error']:
                                                             st.caption(f"📄 {page_display}")
                                                         

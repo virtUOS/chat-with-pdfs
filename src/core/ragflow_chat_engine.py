@@ -170,7 +170,8 @@ class RAGFlowChatEngine:
             
             # Enhanced logging with more diagnostic information
             Logger.warning(f"RAGFlow RAW response: {response}")
-            Logger.info(f"RAGFlow response - Answer length: {len(answer)}, Found {len(reference.get('chunks', []))} source chunks, Response time: {response_time:.2f}s")
+            chunks = reference.get('chunks') or []  # Handle None case
+            Logger.info(f"RAGFlow response - Answer length: {len(answer)}, Found {len(chunks)} source chunks, Response time: {response_time:.2f}s")
             Logger.info(f"RAGFlow response keys: {list(data.keys())}")
             Logger.info(f"Reference keys: {list(reference.keys()) if reference else 'No reference object'}")
             
@@ -178,7 +179,7 @@ class RAGFlowChatEngine:
             citation_matches = re.findall(r'\[ID:(\d+)\]', answer)
             citation_ids = list(set(citation_matches))  # unique citation IDs
             has_citations = len(citation_ids) > 0
-            has_chunks = len(reference.get('chunks', [])) > 0
+            has_chunks = len(chunks) > 0
             
             # Log citation analysis
             Logger.info(f"Citation analysis: Found {len(citation_ids)} unique citations: {citation_ids}")
@@ -207,10 +208,10 @@ class RAGFlowChatEngine:
                 Logger.info(f"RAGFlow provided answer without retrieval (no citations, no chunks)")
                 Logger.info(f"Answer length: {len(answer)}")
             elif has_citations and has_chunks:
-                Logger.info(f"RAGFlow working correctly: {len(reference.get('chunks', []))} chunks with {len(citation_ids)} unique citations")
+                Logger.info(f"RAGFlow working correctly: {len(chunks)} chunks with {len(citation_ids)} unique citations")
                 # Log chunk information for successful cases
                 chunk_info = []
-                for i, chunk in enumerate(reference.get('chunks', [])[:3]):  # First 3 chunks only
+                for i, chunk in enumerate(chunks[:3]):  # First 3 chunks only
                     chunk_info.append({
                         'chunk_id': chunk.get('id', 'No ID'),
                         'content_length': len(chunk.get('content', '')),
@@ -219,7 +220,7 @@ class RAGFlowChatEngine:
                     })
                 Logger.info(f"Sample chunk info: {chunk_info}")
             else:
-                Logger.warning(f"RAGFlow unusual case: {len(reference.get('chunks', []))} chunks without citations")
+                Logger.warning(f"RAGFlow unusual case: {len(chunks)} chunks without citations")
             
             # Update session ID if provided
             if data.get('session_id'):

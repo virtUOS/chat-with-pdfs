@@ -6,6 +6,7 @@ import streamlit as st
 
 from ..utils.logger import Logger
 from ..utils.citations import extract_citation_indices
+from ..utils.i18n import I18n
 from ..core.ragflow_chat_engine import RAGFlowChatEngine
 
 
@@ -33,7 +34,7 @@ def handle_query_submission(query_text: str, current_file: str, chat_container) 
         with st.chat_message('user'):
             st.markdown(query_text)
     
-        with st.spinner('Thinking...'):
+        with st.spinner(I18n.t('thinking')):
             try:
                 # Process the query using the RAGFlow chat engine
                 response = RAGFlowChatEngine.process_query(query_text, current_file)
