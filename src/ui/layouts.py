@@ -72,7 +72,7 @@ def render_sidebar() -> None:
                         st.caption(I18n.t('documents_available', count=len(assistant_documents)))
                         
                         with doc_list_container:
-                            for doc in assistant_documents:
+                            for i, doc in enumerate(assistant_documents):
                                 doc_name = doc.get('name', 'Unnamed Document')
                                 dataset_id = doc.get('dataset_id', '')
                                 dataset_name = dataset_names.get(dataset_id, f'Dataset {dataset_id}')
@@ -111,7 +111,9 @@ def render_sidebar() -> None:
                                 # Show dataset info
                                 col2.caption(f"📚 {dataset_name}")
                                 
-                                st.divider()
+                                # Only add divider if not the last document
+                                if i < len(assistant_documents) - 1:
+                                    st.divider()
                     else:
                         st.info(I18n.t('no_documents_in_kb'))
             else:
@@ -319,7 +321,8 @@ def render_main_content() -> None:
                                         
                                         # Only proceed if we have a citation mapping
                                         if "citation_mapping" in msg:
-                                            for citation_num in sorted(citation_numbers):
+                                            sorted_citations = sorted(citation_numbers)
+                                            for idx, citation_num in enumerate(sorted_citations):
                                                 # Get the original source index from the mapping
                                                 if str(citation_num) in msg["citation_mapping"]:
                                                     original_source_index = msg["citation_mapping"][str(citation_num)]
@@ -361,15 +364,14 @@ def render_main_content() -> None:
                                                         source_text = format_source_for_display(source)
                                                         st.markdown(f"   {source_text}")
                                                         
-                                                        st.markdown("---")  # Add separator between sources
+                                                        # Add separator between sources, but not after the last one
+                                                        if idx < len(sorted_citations) - 1:
+                                                            st.markdown("---")  # Add separator between sources
                                                         displayed_sources.add(original_source_index)
                                                 else:
                                                     Logger.warning(f"Citation number {citation_num} not found in mapping")
                                         else:
                                             st.warning(I18n.t('citation_mapping_not_available'))
-                                        # Add separator between sources
-                                        if len(displayed_sources) < len(citation_numbers):
-                                            st.divider()
                                                 
                                 # Display images if present
                                 if msg["role"] == "assistant" and msg.get("images") and len(msg["images"]) > 0:

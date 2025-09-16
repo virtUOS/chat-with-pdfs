@@ -118,13 +118,9 @@ def display_ragflow_document_info(ragflow_doc: dict) -> None:
         # Display the summary text
         if isinstance(summary_data, dict):
             summary_text = summary_data.get('text', '')
-            sources = summary_data.get('sources', [])
-            citation_mapping = summary_data.get('citation_mapping', {})
         else:
             # Legacy string format
             summary_text = summary_data
-            sources = []
-            citation_mapping = {}
         
         st.markdown(summary_text)
     else:
