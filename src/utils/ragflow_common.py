@@ -367,11 +367,8 @@ def generate_ragflow_query_suggestions(ragflow_doc: dict) -> None:
             # Debug: Log the content being used
             Logger.info(f"Using document content for suggestions (length: {len(document_content)}): {document_content[:200]}...")
             
-            # Use the same approach as summary generation - ask about the document by name
-            doc_name = ragflow_doc.get('name', 'this document')
-            
             # Create a question that asks the assistant to generate questions about the specific document
-            # Use the UI language - translation will be handled in the main query processing
+            doc_name = ragflow_doc.get('name', 'this document')
             suggestion_prompt = PromptTemplates.get_query_suggestion_prompt()
             suggestion_query = suggestion_prompt.format(doc_name=doc_name)
             
@@ -380,6 +377,9 @@ def generate_ragflow_query_suggestions(ragflow_doc: dict) -> None:
             
             # Use RAGFlowChatEngine.process_query but don't store for annotations
             try:
+                # Get the document name for session management
+                doc_name = ragflow_doc.get('name', 'this document')
+                
                 # Debug: Log the session key that will be used for suggestions
                 suggestion_session_key = f'ragflow_session_{doc_name}'
                 Logger.info(f"Query suggestion using session key: {suggestion_session_key}")

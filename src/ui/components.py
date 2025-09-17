@@ -666,8 +666,10 @@ def _generate_document_summary_with_assistant(ragflow_doc: dict) -> dict | None:
         doc_name = ragflow_doc.get('name', 'this document')
         summary_query = PromptTemplates.get_summary_query_prompt().format(doc_name=doc_name)
         
+        Logger.info(f"Summary generation for document: {doc_name}")
+        
         # Use store_for_annotations=False to prevent PDF annotations from summary generation
-        response = RAGFlowChatEngine.process_query(summary_query, ragflow_doc.get('name', ''), store_for_annotations=False)
+        response = RAGFlowChatEngine.process_query(summary_query, doc_name, store_for_annotations=False)
         
         if response and response.get('answer'):
             # Remove citations from summary text (same as query suggestions)

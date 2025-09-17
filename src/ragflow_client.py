@@ -139,9 +139,10 @@ class RAGFlowClient:
         if not target_chat:
             raise ValueError(f"Chat {chat_id} not found")
         
-        # Always create new session to avoid SDK bugs
+        # Always create new session but track it properly
+        # This ensures each query gets a fresh context without session pollution
         session_obj = target_chat.create_session()
-        session_id = session_obj.id
+        actual_session_id = session_obj.id
         
         # Use session.ask method with stream=True to avoid SDK bugs
         # Use session.ask with stream=True (works and provides references)
@@ -157,7 +158,7 @@ class RAGFlowClient:
                 "code": 0,
                 "data": {
                     "answer": final_response.content,
-                    "session_id": session_id,
+                    "session_id": actual_session_id,
                     "reference": {
                         "chunks": final_response.reference
                     }

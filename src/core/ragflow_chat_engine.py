@@ -49,8 +49,7 @@ class RAGFlowChatEngine:
         try:
             Logger.info(f"Processing query for document {file_name} with RAGFlow: {prompt[:50]}...")
             
-            # Add document context to scope the query to the specific document
-            # This helps RAGFlow focus on the intended document rather than searching the entire dataset
+            # Use document scoping approach with proper prompt templates
             scoped_prompt = PromptTemplates.get_document_scoping_prompt().format(doc_name=file_name, question=prompt)
             Logger.info(f"Scoped query: {scoped_prompt[:100]}...")
             
@@ -62,39 +61,18 @@ class RAGFlowChatEngine:
             if not chat_id:
                 raise Exception("No RAGFlow chat assistant found")
             
-            # Get or create session ID for this file
+            # Use session management only for user queries (store_for_annotations=True)
+            # Skip session management for suggestions and summaries to avoid context issues
             session_key = f'ragflow_session_{file_name}'
-            session_id = st.session_state.get(session_key)
+            session_id = None
             
-            # Debug: Log session key information
-            Logger.info(f"User query using session key: {session_key}")
-            Logger.info(f"Current file_name parameter: {file_name}")
-            Logger.info(f"Current session state current_file: {st.session_state.get('current_file', 'NOT SET')}")
-            if session_id:
-                Logger.info(f"Found existing session ID: {session_id}")
+            if store_for_annotations:
+                # For user queries, try to maintain session continuity
+                session_id = st.session_state.get(session_key)
+                Logger.info(f"User query using session: {session_id or 'None (will create new)'}")
             else:
-                Logger.info(f"No existing session found for key: {session_key}")
-            
-            # If no session exists, create one first but don't store it yet
-            if not session_id:
-                Logger.info("No session found, creating new RAGFlow session...")
-                init_response = chat_engine.client.chat_completion(
-                    chat_id=chat_id,
-                    question="",  # Empty question to initialize session
-                    stream=False
-                )
-                
-                if init_response.get('code') == 0:
-                    init_data = init_response.get('data', {})
-                    temp_session_id = init_data.get('session_id')
-                    if temp_session_id:
-                        # Don't store yet - let the actual query establish the session
-                        session_id = temp_session_id
-                        Logger.info(f"Initialized RAGFlow session: {session_id}")
-                    else:
-                        Logger.warning("Session initialization didn't return session_id")
-                else:
-                    Logger.error(f"Failed to initialize RAGFlow session: {init_response.get('message')}")
+                # For suggestions and summaries, always use fresh sessions
+                Logger.info("Using fresh session for suggestions/summary (no session management)")
             
             # Language analysis for cross-language debugging
             def detect_language_hints(text):
@@ -134,38 +112,12 @@ class RAGFlowChatEngine:
             # Execute query with RAGFlow using the scoped prompt
             start_time = time.time()
             
-            # Try with session first
+            # Execute query without session management to avoid context issues
             response = chat_engine.client.chat_completion(
                 chat_id=chat_id,
                 question=scoped_prompt,
-                stream=False,
-                session_id=session_id
+                stream=False
             )
-            
-            # If no chunks returned and we have a session, try without session as fallback
-            data = response.get('data', {}) if response.get('code') == 0 else {}
-            reference = data.get('reference', {})
-            chunks = reference.get('chunks') or []
-            
-            if len(chunks) == 0 and session_id:
-                Logger.warning(f"No chunks returned with session {session_id}, trying without session as fallback...")
-                response = chat_engine.client.chat_completion(
-                    chat_id=chat_id,
-                    question=scoped_prompt,
-                    stream=False
-                    # No session_id parameter - let RAGFlow create fresh session
-                )
-                
-                if response.get('code') == 0:
-                    fallback_data = response.get('data', {})
-                    fallback_reference = fallback_data.get('reference', {})
-                    fallback_chunks = fallback_reference.get('chunks') or []
-                    if len(fallback_chunks) > 0:
-                        Logger.info(f"Fallback query succeeded with {len(fallback_chunks)} chunks")
-                        # Clear the problematic session
-                        if session_key in st.session_state:
-                            del st.session_state[session_key]
-                            Logger.info(f"Cleared problematic session: {session_key}")
             
             end_time = time.time()
             response_time = end_time - start_time
@@ -250,21 +202,14 @@ class RAGFlowChatEngine:
             else:
                 Logger.warning(f"RAGFlow unusual case: {len(chunks)} chunks without citations")
             
-            # Store session ID for future use
+            # Store session ID only for user queries to maintain document context
             response_session_id = data.get('session_id')
-            if response_session_id:
-                # If this is a new session or if the response had chunks, update it
-                if not session_id or (chunks and len(chunks) > 0):
-                    st.session_state[session_key] = response_session_id
-                    Logger.info(f"Stored session ID: {response_session_id}")
-                elif response_session_id != session_id:
-                    Logger.warning(f"RAGFlow returned different session ID. Expected: {session_id}, Got: {response_session_id}")
-                    # If the current query failed (no chunks) but we have a previous working session, keep the old one
-                    if len(chunks) == 0 and session_id:
-                        Logger.info(f"Keeping existing session ID: {session_id} (current query returned no chunks)")
-                    else:
-                        st.session_state[session_key] = response_session_id
-                        Logger.info(f"Updated session ID to: {response_session_id}")
+            if response_session_id and store_for_annotations:
+                # Only store session for user queries, not suggestions/summaries
+                st.session_state[session_key] = response_session_id
+                Logger.info(f"Stored session ID for user queries: {response_session_id}")
+            else:
+                Logger.info(f"RAGFlow session ID (not stored): {response_session_id}")
             
             # Process sources from RAGFlow response
             sources = RAGFlowChatEngine._process_ragflow_sources(reference)

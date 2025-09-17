@@ -37,9 +37,9 @@ def create_annotations_from_sources(answer_text, sources, citation_mapping=None,
     # Deduplicate citations to avoid creating multiple annotations for the same source
     unique_citations = sorted(list(set(citations)))
     
-    annotations = []
-    citation_to_annotation_mapping = {}
-
+    # Collect all citation data first, preserving citation ID order
+    citation_data = {}
+    
     for citation_idx in unique_citations:
         # Use citation mapping if provided
         source_index = None
@@ -53,9 +53,6 @@ def create_annotations_from_sources(answer_text, sources, citation_mapping=None,
             
             # Only create annotations for sources from the current document
             if current_document_name and is_source_from_current_document(source, current_document_name):
-                # Track starting position for this citation
-                start_annotation_pos = len(annotations)
-                
                 # Create annotations based on mode - use original citation_idx for consistency
                 if annotation_mode == "minimal":
                     ragflow_annotations = _create_minimal_annotations(source, citation_idx, answer_text)
@@ -65,15 +62,29 @@ def create_annotations_from_sources(answer_text, sources, citation_mapping=None,
                     ragflow_annotations = _create_ragflow_position_annotations(source, citation_idx, answer_text)
                 
                 if ragflow_annotations:
-                    annotations.extend(ragflow_annotations)
-                    
-                    # Map this citation to its annotation positions (1-indexed for streamlit-pdf-viewer)
-                    annotation_positions = []
-                    for i in range(len(ragflow_annotations)):
-                        annotation_positions.append(start_annotation_pos + i + 1)
-                    citation_to_annotation_mapping[citation_idx] = annotation_positions
-        else:
-            continue  # Source index out of range
+                    citation_data[citation_idx] = ragflow_annotations
+    
+    # Now build final annotations list in citation ID order
+    annotations = []
+    citation_to_annotation_mapping = {}
+    
+    # Process citations in sorted order to ensure consistent annotation positioning
+    for citation_idx in sorted(citation_data.keys()):
+        ragflow_annotations = citation_data[citation_idx]
+        
+        # Track starting position for this citation
+        start_annotation_pos = len(annotations)
+        
+        # Add annotations to the final list
+        annotations.extend(ragflow_annotations)
+        
+        # Map this citation to its annotation positions (1-indexed for streamlit-pdf-viewer)
+        annotation_positions = []
+        for i in range(len(ragflow_annotations)):
+            annotation_positions.append(start_annotation_pos + i + 1)
+        citation_to_annotation_mapping[citation_idx] = annotation_positions
+        
+        print(f"DEBUG: Citation {citation_idx} assigned positions {annotation_positions}")
     
     return annotations, citation_to_annotation_mapping
 
