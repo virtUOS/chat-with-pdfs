@@ -26,7 +26,7 @@ def calculate_pdf_height(screen_height: Optional[int] = None) -> int:
         int: Optimal PDF viewer height in pixels.
     """
     if screen_height is None:
-        screen_height = streamlit_js_eval(js_expressions='screen.height', key='pdf_screen_height')
+        screen_height = streamlit_js_eval(js_expressions='screen.height', key='pdf_height_fallback')
     
     return int(screen_height * 0.8) if screen_height else 900
 
