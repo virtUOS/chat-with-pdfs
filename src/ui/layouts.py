@@ -71,7 +71,7 @@ def render_main_content() -> None:
         st.subheader(f"📚 Assistant: {selected_assistant}")
         
         if not current_file:
-            st.info("Select a document from the sidebar to start chatting, or upload new documents.")
+            st.info(I18n.t('select_document_or_upload'))
         
         # Single column layout for tabs only
         def chat_tab_content():

@@ -5,10 +5,11 @@ Handles the complete upload process without infinite loops.
 
 import time
 import streamlit as st
-from typing import List, Any, Optional
 
 from ...core.upload_manager import get_upload_manager
 from ...utils.logger import Logger
+from ...utils.i18n import I18n
+from ...config import MAX_FILE_SIZE_MB
 
 
 def render_upload_workflow() -> None:
@@ -24,19 +25,20 @@ def render_upload_workflow() -> None:
         st.session_state.upload_result = None
         st.session_state.upload_error = None
         st.session_state.upload_processing = False
+        st.session_state.upload_widget_key = 0  # For resetting file uploader
     
     # File uploader section
-    st.header("📤 Upload Documents")
-    st.markdown("Upload your documents to create a new knowledge base and chat assistant.")
+    st.header(f"📤 {I18n.t('upload_documents')}")
+    st.markdown(I18n.t('upload_documents_description'))
     
     # Show upload form only if not currently processing
     if not st.session_state.upload_processing:
         uploaded_files = st.file_uploader(
-            "Choose files to upload",
-            type=['pdf', 'txt', 'docx', 'md'],
+            I18n.t('choose_files_to_upload'),
+            type=['pdf'],
             accept_multiple_files=True,
-            help="Supported formats: PDF, TXT, DOCX, MD. Maximum size: 50MB per file.",
-            key='upload_files_input'
+            help=I18n.t('supported_formats_help', max_size=MAX_FILE_SIZE_MB),
+            key=f'upload_files_input_{st.session_state.upload_widget_key}'
         )
         
         if uploaded_files:
@@ -44,53 +46,53 @@ def render_upload_workflow() -> None:
             st.session_state.upload_files = uploaded_files
             
             # Show file preview
-            st.subheader("📁 Selected Files")
+            st.subheader(f"📁 {I18n.t('selected_files')}")
             
             total_size = sum(file.size for file in uploaded_files)
             total_size_mb = total_size / (1024 * 1024)
             
             col1, col2 = st.columns([3, 1])
             with col1:
-                st.write(f"**{len(uploaded_files)} files selected**")
+                st.write(f"**{len(uploaded_files)} {I18n.t('files_selected')}**")
             with col2:
-                st.write(f"**Total: {total_size_mb:.1f} MB**")
+                st.write(f"**{I18n.t('total')}: {total_size_mb:.1f} MB**")
             
             # Validate files
             valid_files, errors = upload_manager.validate_files(uploaded_files)
             
             # Show validation errors
             if errors:
-                st.error("❌ **Validation Errors:**")
+                st.error(f"❌ **{I18n.t('validation_errors')}:**")
                 for error in errors:
                     st.error(error)
             
             # Show valid files and dataset selection
             if valid_files:
-                st.success(f"✅ **{len(valid_files)} files ready for upload**")
+                st.success(f"✅ **{len(valid_files)} {I18n.t('files_ready_for_upload')}**")
                 
                 # Dataset selection
-                st.subheader("🗂️ Dataset Selection")
+                st.subheader(f"🗂️ {I18n.t('dataset_selection')}")
                 
                 dataset_option = st.radio(
-                    "Choose how to organize your documents:",
-                    ["Create New Dataset", "Add to Existing Dataset"],
-                    help="Datasets group related documents together. Each dataset gets its own chat assistant."
+                    I18n.t('choose_organization_method'),
+                    [I18n.t('create_new_dataset'), I18n.t('add_to_existing_dataset')],
+                    help=I18n.t('dataset_organization_help')
                 )
                 
                 dataset_id = None
                 dataset_name = None
                 dataset_description = ""
                 
-                if dataset_option == "Create New Dataset":
+                if dataset_option == I18n.t('create_new_dataset'):
                     dataset_name = st.text_input(
-                        "Dataset Name *",
-                        placeholder="e.g., Research Papers, Company Documents, etc.",
-                        help="Choose a descriptive name for your document collection"
+                        I18n.t('dataset_name_required'),
+                        placeholder=I18n.t('dataset_name_placeholder'),
+                        help=I18n.t('dataset_name_help')
                     )
                     
                     dataset_description = st.text_area(
-                        "Description (optional)",
-                        placeholder="Describe what these documents contain...",
+                        I18n.t('description_optional'),
+                        placeholder=I18n.t('description_placeholder'),
                         height=80
                     )
                 
@@ -108,37 +110,37 @@ def render_upload_workflow() -> None:
                             dataset_ids.append(dataset.get('id'))
                         
                         selected_dataset_idx = st.selectbox(
-                            "Select Dataset",
+                            I18n.t('select_dataset'),
                             range(len(dataset_options)),
                             format_func=lambda x: dataset_options[x],
-                            help="Choose an existing dataset to add your documents to"
+                            help=I18n.t('select_existing_dataset_help')
                         )
                         
                         if selected_dataset_idx is not None:
                             dataset_id = dataset_ids[selected_dataset_idx]
                             dataset_name = dataset_options[selected_dataset_idx]
                             
-                            st.info(f"📚 Adding to: **{dataset_name}**")
+                            st.info(f"📚 {I18n.t('adding_to_dataset', dataset_name=dataset_name)}")
                     
                     else:
-                        st.warning("No existing datasets found. Please create a new dataset.")
+                        st.warning(I18n.t('no_existing_datasets'))
                         return
                 
                 # Upload button (like transcribe button)
                 can_upload = (
-                    valid_files and 
-                    (dataset_option == "Add to Existing Dataset" and dataset_id) or
-                    (dataset_option == "Create New Dataset" and dataset_name and dataset_name.strip())
+                    valid_files and
+                    (dataset_option == I18n.t('add_to_existing_dataset') and dataset_id) or
+                    (dataset_option == I18n.t('create_new_dataset') and dataset_name and dataset_name.strip())
                 )
                 
                 if can_upload:
-                    if st.button("📤 Start Upload", type="primary", use_container_width=True):
+                    if st.button(f"📤 {I18n.t('start_upload')}", type="primary", use_container_width=True):
                         # Start upload operation (like transcription start)
                         st.session_state.upload_processing = True
                         
                         operation_id = upload_manager.start_upload_operation(
                             files=valid_files,
-                            dataset_option="new" if dataset_option == "Create New Dataset" else "existing",
+                            dataset_option="new" if dataset_option == I18n.t('create_new_dataset') else "existing",
                             dataset_id=dataset_id,
                             dataset_name=dataset_name,
                             dataset_description=dataset_description
@@ -146,18 +148,19 @@ def render_upload_workflow() -> None:
                         
                         st.session_state.upload_operation_id = operation_id
                         st.session_state.upload_status = "PENDING"
+                        st.session_state.upload_start_time = time.time()  # Set start time for this operation
                         
                         Logger.info(f"Started upload operation {operation_id}")
                         st.rerun()  # Only rerun when starting upload
                 
-                elif dataset_option == "Create New Dataset" and not (dataset_name and dataset_name.strip()):
-                    st.warning("⚠️ Please enter a dataset name to continue.")
+                elif dataset_option == I18n.t('create_new_dataset') and not (dataset_name and dataset_name.strip()):
+                    st.warning(f"⚠️ {I18n.t('enter_dataset_name_warning')}")
     
-    else:
-        # Show current upload info (like transcription info)
+    elif st.session_state.upload_processing:
+        # Show current upload info only when actively processing
         if st.session_state.upload_files:
-            st.write(f"**Uploading:** {len(st.session_state.upload_files)} files")
-            if st.button("🗑️ Cancel Upload"):
+            st.write(f"**{I18n.t('uploading_files', count=len(st.session_state.upload_files))}**")
+            if st.button(f"🗑️ {I18n.t('cancel_upload')}"):
                 _reset_upload_state()
                 st.rerun()
 
@@ -171,15 +174,12 @@ def render_upload_status() -> None:
         st.session_state.upload_operation_id and 
         st.session_state.upload_status not in ["SUCCESS", "FAILURE"]):
         
-        st.info("🔄 Upload is in progress. Please wait...")
+        st.info(f"🔄 {I18n.t('upload_in_progress')}")
         
         operation_id = st.session_state.upload_operation_id
         
-        # Store start time in session state to persist across renders
-        if 'upload_start_time' not in st.session_state:
-            st.session_state.upload_start_time = time.time()
-        
-        start_time = st.session_state.upload_start_time
+        # Get start time for this operation (set when upload started)
+        start_time = st.session_state.get('upload_start_time', time.time())
         status_placeholder = st.empty()
         
         # Process the operation (like transcription status check)
@@ -210,21 +210,21 @@ def render_upload_status() -> None:
                 
                 if failed_files and successful_files:
                     # Partial success
-                    st.warning(f"⚠️ Upload completed with some issues:")
-                    st.success(f"✅ {len(successful_files)} files processed successfully")
-                    st.error(f"❌ {len(failed_files)} files failed:")
+                    st.warning(f"⚠️ {I18n.t('upload_completed_with_issues')}")
+                    st.success(f"✅ {len(successful_files)} {I18n.t('files_processed_successfully')}")
+                    st.error(f"❌ {len(failed_files)} {I18n.t('files_failed')}")
                     for failed_file in failed_files:
                         st.error(f"  • {failed_file.get('name', 'Unknown')}: {failed_file.get('error', 'Unknown error')}")
-                    st.info(f"🤖 Assistant created with {len(successful_files)} documents")
+                    st.info(f"🤖 {I18n.t('assistant_created_with_documents', count=len(successful_files))}")
                 elif failed_files:
                     # All failed
-                    st.error(f"❌ Upload failed - all {len(failed_files)} files failed processing")
+                    st.error(f"❌ {I18n.t('upload_failed_all_files', count=len(failed_files))}")
                     for failed_file in failed_files:
                         st.error(f"  • {failed_file.get('name', 'Unknown')}: {failed_file.get('error', 'Unknown error')}")
                 else:
                     # All success
-                    st.success("✅ Upload completed! All documents processed successfully.")
-                    st.info(f"🤖 Assistant '{operation.get('assistant_name')}' created and ready to use!")
+                    st.success(f"✅ {I18n.t('upload_completed_success')}")
+                    st.info(f"🤖 {I18n.t('assistant_created_ready', assistant_name=operation.get('assistant_name'))}")
                 
                 # Trigger assistant list refresh
                 if 'ragflow_assistants_cache' in st.session_state:
@@ -233,6 +233,9 @@ def render_upload_status() -> None:
                     del st.session_state.available_ragflow_assistants
                 
                 Logger.info(f"Upload operation {operation_id} completed")
+                
+                # Reset upload state so users can upload more documents
+                _reset_upload_state()
                 time.sleep(2)
                 st.rerun()
                 
@@ -240,7 +243,11 @@ def render_upload_status() -> None:
                 st.session_state.upload_status = "FAILURE"
                 st.session_state.upload_error = operation.get('error_message', 'Unknown error')
                 st.error(f"❌ Upload operation failed: {st.session_state.upload_error}")
-                break
+                
+                # Reset upload state so users can try again
+                time.sleep(3)
+                _reset_upload_state()
+                st.rerun()
                 
             else:
                 # Still processing - check individual document statuses
@@ -269,24 +276,22 @@ def render_upload_status() -> None:
                             else:
                                 # All failed
                                 st.session_state.upload_status = "FAILURE"
-                                st.session_state.upload_error = f"All {total_docs} documents failed to process"
-                                st.error(f"❌ All documents failed to process")
-                                break
+                                st.session_state.upload_error = I18n.t('all_documents_failed')
+                                st.error(f"❌ {I18n.t('all_documents_failed')}")
+                                
+                                # Reset upload state so users can try again
+                                time.sleep(3)
+                                _reset_upload_state()
+                                st.rerun()
                 
                 # Process one step of the operation
                 upload_manager.process_upload_operation(operation_id)
                 
                 status_placeholder.info(
-                    f"📋 Status: {str(status).title()} ({str(stage).title()}). "
-                    f"Progress: {progress}%. "
-                    f"Elapsed: {int(minutes)} min {int(seconds)} sec. "
-                    f"Checking again in 5 seconds..."
+                    f"📋 {I18n.t('upload_status_message', status=str(status).title(), stage=str(stage).title(), progress=progress, minutes=int(minutes), seconds=int(seconds))}"
                 )
                 time.sleep(5)
                 st.rerun()
-    
-    # Reset processing flag when done
-    st.session_state.upload_processing = False
 
 
 def _reset_upload_state():
@@ -299,6 +304,9 @@ def _reset_upload_state():
     st.session_state.upload_processing = False
     st.session_state.upload_start_time = None
     
+    # Increment widget key to force file uploader reset (Streamlit pattern)
+    st.session_state.upload_widget_key += 1
+    
     # Clear any active operations from session state
     if 'upload_operations' in st.session_state:
         st.session_state.upload_operations = {}
@@ -307,4 +315,5 @@ def _reset_upload_state():
 def render_upload_interface() -> None:
     """Main upload interface combining workflow and status."""
     render_upload_workflow()
-    render_upload_status()
+    if st.session_state.get('upload_processing', False):
+        render_upload_status()

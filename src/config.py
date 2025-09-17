@@ -25,5 +25,9 @@ if not RAGFLOW_API_KEY:
 if not RAGFLOW_BASE_URL:
     print("Warning: RAGFLOW_BASE_URL environment variable not set")
 
+# Upload Configuration
+MAX_FILE_SIZE_MB = int(os.environ.get("MAX_FILE_SIZE_MB", "200"))  # Default 200MB
+SUPPORTED_FILE_TYPES = {'.pdf'}  # PDF only for this app
+
 # Log level
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "WARNING")

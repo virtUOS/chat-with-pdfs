@@ -24,12 +24,12 @@ def render_content_tabs(current_ragflow_doc: dict, images_container_height: int,
             I18n.t('chat'),
             I18n.t('document_info'),
             I18n.t('images'),
-            "📤 Upload Documents"
+            f"📤 {I18n.t('upload_documents')}"
         ])
     else:
         # When no document selected, make upload tab more prominent
         upload_tab, chat_tab, info_tab, images_tab = st.tabs([
-            "📤 Upload Documents",
+            f"📤 {I18n.t('upload_documents')}",
             I18n.t('chat'),
             I18n.t('document_info'),
             I18n.t('images')
@@ -40,7 +40,7 @@ def render_content_tabs(current_ragflow_doc: dict, images_container_height: int,
         if current_ragflow_doc:
             chat_tab_content()
         else:
-            st.info("Select a document from the sidebar to start chatting, or upload new documents using the Upload tab.")
+            st.info(I18n.t('select_document_or_upload_tab'))
     
     # Information tab
     with info_tab:

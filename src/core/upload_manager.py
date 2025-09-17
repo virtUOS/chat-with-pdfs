@@ -17,6 +17,7 @@ import streamlit as st
 
 from ..ragflow_client import create_client
 from ..utils.logger import Logger
+from ..config import MAX_FILE_SIZE_MB, SUPPORTED_FILE_TYPES
 
 
 class UploadStatus(Enum):
@@ -71,9 +72,9 @@ class UploadManager:
         valid_files = []
         errors = []
         
-        # Supported file types
-        supported_types = {'.pdf', '.txt', '.docx', '.md'}
-        max_file_size = 50 * 1024 * 1024  # 50MB
+        # Use centralized configuration
+        supported_types = SUPPORTED_FILE_TYPES
+        max_file_size = MAX_FILE_SIZE_MB * 1024 * 1024  # Convert MB to bytes
         
         seen_hashes = set()
         
@@ -87,7 +88,7 @@ class UploadManager:
             # Check file size
             if file.size > max_file_size:
                 size_mb = file.size / (1024 * 1024)
-                errors.append(f"❌ {file.name}: File too large ({size_mb:.1f}MB). Maximum: 50MB")
+                errors.append(f"❌ {file.name}: File too large ({size_mb:.1f}MB). Maximum: {MAX_FILE_SIZE_MB}MB")
                 continue
             
             # Check for duplicates by content hash
