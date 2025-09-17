@@ -55,12 +55,18 @@ def validate_and_clamp_coordinates(x, y, width, height, page_num, document_name=
     
     # Define minimum dimensions to filter out noise
     MIN_DIMENSION = 5      # Minimum annotation size
-    MAX_SINGLE_DIMENSION = min(max_width * 0.8, max_height * 0.8)  # Max 80% of page
+    MAX_WIDTH_RATIO = 0.95   # Max 95% of page width (more generous for text spans)
+    MAX_HEIGHT_RATIO = 0.9   # Max 90% of page height
     
     # Basic size validation - filter out noise and oversized annotations
     if width < MIN_DIMENSION or height < MIN_DIMENSION:
+        print(f"DEBUG ANNOTATION: Rejected due to small size: {width}x{height} < {MIN_DIMENSION}")
         return None
-    if width > MAX_SINGLE_DIMENSION or height > MAX_SINGLE_DIMENSION:
+    if width > max_width * MAX_WIDTH_RATIO:
+        print(f"DEBUG ANNOTATION: Rejected due to excessive width: {width} > {max_width * MAX_WIDTH_RATIO}")
+        return None
+    if height > max_height * MAX_HEIGHT_RATIO:
+        print(f"DEBUG ANNOTATION: Rejected due to excessive height: {height} > {max_height * MAX_HEIGHT_RATIO}")
         return None
     
     # Coordinate validation and clamping

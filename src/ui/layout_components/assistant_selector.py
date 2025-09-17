@@ -17,6 +17,16 @@ def render_assistant_selector() -> bool:
     """
     st.header(I18n.t('chat_assistant'))
     
+    # Check if assistants list needs refresh (from upload operations)
+    if st.session_state.get('assistants_list_needs_refresh', False):
+        # Clear cache to force refresh
+        if 'ragflow_assistants_cache' in st.session_state:
+            del st.session_state.ragflow_assistants_cache
+        if 'available_ragflow_assistants' in st.session_state:
+            del st.session_state.available_ragflow_assistants
+        st.session_state.assistants_list_needs_refresh = False
+        Logger.info("Refreshed assistants list due to background operations")
+    
     try:
         available_assistants = get_available_ragflow_assistants()
         if available_assistants:

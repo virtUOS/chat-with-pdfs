@@ -41,18 +41,23 @@ def create_annotations_from_sources(answer_text, sources, citation_mapping=None,
     citation_data = {}
     
     for citation_idx in unique_citations:
+        print(f"DEBUG: Processing citation {citation_idx}")
         # Use citation mapping if provided
         source_index = None
         if citation_mapping and str(citation_idx) in citation_mapping:
             source_index = citation_mapping[str(citation_idx)]
+            print(f"DEBUG: Citation {citation_idx} mapped to source index {source_index}")
         else:
+            print(f"DEBUG: No mapping found for citation {citation_idx}, available mappings: {citation_mapping}")
             continue  # Skip if no mapping available
         
         if 0 <= source_index < len(sources):
             source = sources[source_index]
+            print(f"DEBUG: Source found for index {source_index}, doc_name: {source.get('metadata', {}).get('document_name', 'Unknown')}")
             
             # Only create annotations for sources from the current document
             if current_document_name and is_source_from_current_document(source, current_document_name):
+                print(f"DEBUG: Source is from current document {current_document_name}")
                 # Create annotations based on mode - use original citation_idx for consistency
                 if annotation_mode == "minimal":
                     ragflow_annotations = _create_minimal_annotations(source, citation_idx, answer_text)
@@ -61,8 +66,13 @@ def create_annotations_from_sources(answer_text, sources, citation_mapping=None,
                 else:  # "smart" mode (default)
                     ragflow_annotations = _create_ragflow_position_annotations(source, citation_idx, answer_text)
                 
+                print(f"DEBUG: Created {len(ragflow_annotations) if ragflow_annotations else 0} annotations for citation {citation_idx}")
                 if ragflow_annotations:
                     citation_data[citation_idx] = ragflow_annotations
+            else:
+                print(f"DEBUG: Source NOT from current document. Source doc: '{source.get('metadata', {}).get('document_name', 'Unknown')}', Current doc: '{current_document_name}'")
+        else:
+            print(f"DEBUG: Source index {source_index} out of range (0-{len(sources)-1})")
     
     # Now build final annotations list in citation ID order
     annotations = []
@@ -114,9 +124,11 @@ def _create_ragflow_position_annotations(source, citation_idx, answer_text):
     citation_format = f"[{citation_idx}]"
     
     try:
+        print(f"DEBUG: Starting annotation creation for citation {citation_idx}, positions count: {len(positions)}")
         # First, collect and validate all positions
         valid_positions = []
-        for position in positions:
+        for i, position in enumerate(positions):
+            print(f"DEBUG: Processing position {i}: {position}")
             if len(position) >= 5:
                 page_num, coord1, coord2, coord3, coord4 = position[:5]
                 x0, x1, y0, y1 = coord1, coord2, coord3, coord4
@@ -128,15 +140,22 @@ def _create_ragflow_position_annotations(source, citation_idx, answer_text):
                 width = x_max - x_min
                 height = y_max - y_min
                 
+                print(f"DEBUG: Position {i} - page: {page_num}, coords: ({x_min}, {y_min}, {width}, {height})")
+                
                 # Apply boundary validation and coordinate clamping
                 validated_pos = validate_and_clamp_coordinates(
                     x_min, y_min, width, height, page_num, source.get('metadata', {}).get('document_name', '')
                 )
                 
+                print(f"DEBUG: Position {i} validation result: {validated_pos}")
                 if validated_pos:
                     valid_positions.append(validated_pos)
+            else:
+                print(f"DEBUG: Position {i} has insufficient data: {len(position)} elements")
         
+        print(f"DEBUG: Valid positions count: {len(valid_positions)}")
         if not valid_positions:
+            print(f"DEBUG: No valid positions found, returning None")
             return None
         
         # Group positions by page for intelligent merging
