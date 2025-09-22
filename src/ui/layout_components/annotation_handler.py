@@ -29,7 +29,7 @@ def create_annotation_click_handler() -> Callable[[Dict[str, Any]], None]:
     return annotation_click_handler
 
 
-def create_annotations_for_document(current_file: str) -> Tuple[List[Dict[str, Any]], Dict[int, List[int]]]:
+def create_annotations_for_document(current_file: str) -> List[Dict[str, Any]]:
     """
     Create annotations for the current document based on chat history.
     
@@ -37,14 +37,13 @@ def create_annotations_for_document(current_file: str) -> Tuple[List[Dict[str, A
         current_file: Name of the current document
         
     Returns:
-        Tuple of (annotations list, citation_to_annotation_mapping)
+        List of annotations for the document
     """
     annotations = []
-    citation_to_annotation_mapping = {}
     
     # Check if we have a document-specific response with sources and answer
     if not LayoutStateManager.has_document_response_with_sources(current_file):
-        return annotations, citation_to_annotation_mapping
+        return annotations
     
     # Get document response data
     doc_response = LayoutStateManager.get_document_responses(current_file)
@@ -65,7 +64,7 @@ def create_annotations_for_document(current_file: str) -> Tuple[List[Dict[str, A
     # Store the mapping for scroll functionality
     LayoutStateManager.set_citation_to_annotation_mapping(citation_to_annotation_mapping)
     
-    return annotations, citation_to_annotation_mapping
+    return annotations
 
 
 def get_scroll_to_annotation() -> int | None:

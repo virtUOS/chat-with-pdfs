@@ -8,7 +8,6 @@ from streamlit_js_eval import streamlit_js_eval
 
 from ...utils.logger import Logger
 from ...utils.i18n import I18n
-from ...utils.annotations import create_annotations_from_sources
 from ...ragflow_client import create_client
 from ..layout_state_manager import LayoutStateManager
 from .pdf_utils import calculate_pdf_height, extract_page_dimensions_immediately
@@ -34,7 +33,7 @@ def render_pdf_viewer(current_file: str, current_ragflow_doc: dict) -> None:
         pdf_data = _download_pdf_from_ragflow(current_file, current_ragflow_doc, pdf_cache_key)
     
     if pdf_data:
-        _render_pdf_with_annotations(pdf_data, current_file, current_ragflow_doc)
+        _render_pdf_with_annotations(pdf_data, current_file)
     else:
         st.info(I18n.t('pdf_loading'))
 
@@ -104,16 +103,15 @@ def _download_pdf_from_ragflow(current_file: str, current_ragflow_doc: dict, pdf
     return None
 
 
-def _render_pdf_with_annotations(pdf_data: bytes, current_file: str, current_ragflow_doc: dict) -> None:
+def _render_pdf_with_annotations(pdf_data: bytes, current_file: str) -> None:
     """Render the PDF viewer with annotations.
     
     Args:
         pdf_data: PDF data as bytes
         current_file: Name of the current file
-        current_ragflow_doc: RAGFlow document dictionary
     """
     # Get annotations for this document's chat history
-    annotations, citation_to_annotation_mapping = create_annotations_for_document(current_file)
+    annotations = create_annotations_for_document(current_file)
     
     # Create PDF viewer component with responsive height
     screen_height = streamlit_js_eval(js_expressions='screen.height', key='pdf_screen_height')
@@ -128,6 +126,7 @@ def _render_pdf_with_annotations(pdf_data: bytes, current_file: str, current_rag
     pdf_viewer(
         pdf_data,
         height=pdf_height,
+        width="100%",  # Use dynamic width based on container
         annotations=annotations,
         annotation_outline_size=5,  # Make outlines more visible
         on_annotation_click=annotation_click_handler,

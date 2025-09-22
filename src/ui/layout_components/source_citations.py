@@ -18,12 +18,13 @@ from ...utils.source_formatting import (
 from ..layout_state_manager import LayoutStateManager
 
 
-def render_source_citations(msg: Dict[str, Any]) -> None:
+def render_source_citations(msg: Dict[str, Any], msg_idx: int = 0) -> None:
     """
     Render source citations for a chat message.
     
     Args:
         msg: Chat message containing citations and sources
+        msg_idx: Index of the message in chat history for unique key generation
     """
     citation_numbers = msg.get("citations", [])
     
@@ -34,16 +35,17 @@ def render_source_citations(msg: Dict[str, Any]) -> None:
     # Display sources if this is an assistant message with sources
     if msg["role"] == "assistant" and msg.get("sources"):
         with st.expander(I18n.t('show_sources')):
-            _render_citation_sources(msg, citation_numbers)
+            _render_citation_sources(msg, citation_numbers, msg_idx)
 
 
-def _render_citation_sources(msg: Dict[str, Any], citation_numbers: List[int]) -> None:
+def _render_citation_sources(msg: Dict[str, Any], citation_numbers: List[int], msg_idx: int = 0) -> None:
     """
     Render the actual citation sources with scroll functionality.
     
     Args:
         msg: Chat message containing citation mapping and sources
         citation_numbers: List of citation numbers to display
+        msg_idx: Index of the message in chat history for unique key generation
     """
     # Only display sources that are actually cited in the response
     displayed_sources: Set[int] = set()
@@ -83,7 +85,8 @@ def _render_citation_sources(msg: Dict[str, Any], citation_numbers: List[int]) -
                     citation_to_annotation_pos,
                     displayed_sources,
                     idx,
-                    len(sorted_citations)
+                    len(sorted_citations),
+                    msg_idx
                 )
         else:
             Logger.warning(f"Citation number {citation_num} not found in mapping")
@@ -98,7 +101,8 @@ def _render_single_source(
     citation_to_annotation_pos: Dict[int, List[int]],
     displayed_sources: Set[int],
     idx: int,
-    total_citations: int
+    total_citations: int,
+    msg_idx: int = 0
 ) -> None:
     """
     Render a single source citation with metadata and scroll functionality.
@@ -113,6 +117,7 @@ def _render_single_source(
         displayed_sources: Set of already displayed source indices
         idx: Current citation index
         total_citations: Total number of citations
+        msg_idx: Index of the message in chat history for unique key generation
     """
     try:
         full_text = getattr(source, 'text', '')
@@ -154,7 +159,7 @@ def _render_single_source(
         annotation_positions = citation_to_annotation_pos.get(citation_num, [])
         annotation_position = annotation_positions[0] if annotation_positions else None
         
-        if annotation_position and st.button("📍", key=f"scroll_to_{citation_num}_{original_source_index}",
+        if annotation_position and st.button("📍", key=f"scroll_to_msg{msg_idx}_{citation_num}_{original_source_index}",
                                            help=I18n.t('scroll_to_annotation', citation=display_num)):
             # Set the annotation position to scroll to (1-indexed)
             Logger.info(f"Button clicked: citation_num={citation_num}, display_num={display_num}, annotation_position={annotation_position}")

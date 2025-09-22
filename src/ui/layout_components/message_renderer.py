@@ -20,12 +20,12 @@ def render_chat_messages(current_file: str, chat_container) -> None:
     """
     with chat_container:
         chat_history = LayoutStateManager.get_chat_history(current_file) if current_file else []
-        for msg in chat_history:
+        for msg_idx, msg in enumerate(chat_history):
             with st.chat_message(msg["role"]):
                 st.markdown(msg["content"])
 
                 # Display source citations for this message
-                render_source_citations(msg)
+                render_source_citations(msg, msg_idx)
                                         
                 # Display images if present
                 _render_message_images(msg)
